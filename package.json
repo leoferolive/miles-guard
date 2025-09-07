@@ -1,0 +1,36 @@
+{
+  "name": "milesguard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha tests/**/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leoferolive/miles-guard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/leoferolive/miles-guard/issues"
+  },
+  "homepage": "https://github.com/leoferolive/miles-guard#readme",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.19",
+    "chalk": "^5.6.0",
+    "dotenv": "^17.2.2",
+    "inquirer": "^12.9.4",
+    "node-telegram-bot-api": "^0.66.0",
+    "qrcode-terminal": "^0.12.0",
+    "winston": "^3.17.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "chai": "^6.0.1",
+    "mocha": "^11.7.2",
+    "sinon": "^21.0.0"
+  }
+}

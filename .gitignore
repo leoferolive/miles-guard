@@ -1,0 +1,70 @@
+# Dependências do Node.js
+node_modules/
+
+# Arquivos de credenciais e autenticação
+auth_info/
+auth_info_poc/
+.env
+.env.local
+.env.*.local
+
+# Arquivos de log
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos de build e distribuição
+dist/
+build/
+out/
+.release/
+
+# Arquivos temporários e cache
+.tmp/
+temp/
+*.tmp
+*.temp
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDEs e editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Arquivos de configuração do PM2
+ecosystem.config.js
+
+# Arquivos de teste
+coverage/
+
+# Arquivos de documentação gerada
+docs/_book/
+
+# Arquivos de backup
+*.bak
+*.backup
+
+# Arquivos binários
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Arquivos de imagem gerados
+*.min.js
+*.min.css
+
+# Arquivos específicos do projeto
+.qwen/
+
+# Diretórios de credenciais (mesmo que vazios)
+auth_info/
+auth_info_poc/
