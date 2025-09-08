@@ -40,7 +40,7 @@ Thumbs.db
 *.sublime-workspace
 
 # Arquivos de configuração do PM2
-ecosystem.config.js
+ecosystem.config.js.local
 
 # Arquivos de teste
 coverage/

@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'docs/**'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'skip-release')"
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      env:
+        NODE_ENV: test
+        
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+    - name: Determine version bump
+      id: version
+      run: |
+        # Analisar commits desde a última tag para determinar tipo de bump
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+        
+        # Obter mensagens de commit desde a última tag
+        COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --no-merges)
+        echo "Commits since last tag:"
+        echo "$COMMITS"
+        
+        # Determinar tipo de versão baseado nas mensagens de commit
+        if echo "$COMMITS" | grep -E "(BREAKING|major):" > /dev/null; then
+          BUMP_TYPE="major"
+        elif echo "$COMMITS" | grep -E "(feat|feature|minor):" > /dev/null; then
+          BUMP_TYPE="minor"
+        elif echo "$COMMITS" | grep -E "(fix|patch|bug):" > /dev/null; then
+          BUMP_TYPE="patch"
+        else
+          BUMP_TYPE="patch"
+        fi
+        
+        echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+        echo "Determined bump type: $BUMP_TYPE"
+        
+    - name: Bump version
+      run: |
+        BUMP_TYPE="${{ steps.version.outputs.bump_type }}"
+        echo "Bumping version with type: $BUMP_TYPE"
+        npm version $BUMP_TYPE --no-git-tag-version
+        
+    - name: Get new version
+      id: new_version
+      run: |
+        NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+        
+    - name: Commit version bump
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.new_version }}"
+        git add package.json
+        git commit -m "chore: bump version to v$NEW_VERSION [skip-release]"
+        git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+        
+    - name: Push changes
+      run: |
+        git push origin master
+        git push origin --tags
+        
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.new_version.outputs.new_version }}
+        release_name: Release v${{ steps.new_version.outputs.new_version }}
+        body: |
+          ## 🚀 Release v${{ steps.new_version.outputs.new_version }}
+          
+          ### Changes
+          - Automated release based on recent commits
+          - Version bump type: ${{ steps.version.outputs.bump_type }}
+          
+          ### Installation
+          ```bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd MilesGuard
+          npm install
+          ```
+          
+          ### Quick Start
+          ```bash
+          npm start        # Development mode
+          npm run prod     # Production with PM2
+          npm run poc      # Test WhatsApp connection
+          ```
+          
+        draft: false
+        prerelease: false

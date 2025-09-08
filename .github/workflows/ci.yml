@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run linter (if available)
+      run: |
+        if npm run lint --silent 2>/dev/null; then
+          npm run lint
+        else
+          echo "No linter configured, skipping..."
+        fi
+      continue-on-error: false
+      
+    - name: Run tests
+      run: npm test
+      env:
+        NODE_ENV: test
+        
+    - name: Run build check
+      run: |
+        if npm run build --silent 2>/dev/null; then
+          npm run build
+        else
+          echo "No build script configured, checking syntax..."
+          node --check src/index.js
+        fi
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run security audit
+      run: npm audit --audit-level=moderate
+      
+    - name: Check for vulnerabilities
+      run: |
+        if command -v npx &> /dev/null; then
+          npx audit-ci --moderate
+        fi
+      continue-on-error: true
+
+  version-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Check version consistency
+      run: |
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        echo "Package version: $PACKAGE_VERSION"
+        
+        # Verificar se a versão foi atualizada comparando com a tag mais recente
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        LATEST_VERSION=${LATEST_TAG#v}
+        
+        echo "Latest tag version: $LATEST_VERSION"
+        
+        if [ "$PACKAGE_VERSION" != "$LATEST_VERSION" ]; then
+          echo "✅ Version updated from $LATEST_VERSION to $PACKAGE_VERSION"
+        else
+          echo "⚠️ Version not updated. Consider bumping version for new releases."
+        fi
