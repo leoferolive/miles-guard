@@ -1,5 +1,4 @@
 const fs = require('fs').promises;
-const path = require('path');
 const { z } = require('zod');
 
 const configSchema = z.object({

@@ -25,6 +25,12 @@ npm install
 # Development mode
 npm start
 
+# Development with file watching
+npm run dev
+
+# Test WhatsApp connection (POC)
+npm run poc
+
 # Production with PM2
 npm run prod
 
@@ -34,6 +40,11 @@ npm run logs
 # Stop service
 npm run stop
 
+# Run tests
+npm test
+npm run test:unit
+npm run test:integration
+
 # PM2 monitoring
 pm2 status milesguard
 pm2 logs milesguard
@@ -42,16 +53,28 @@ pm2 monit
 
 ## Project Architecture
 
-The system follows a 6-phase development plan:
+The system implements **Clean Architecture** with clear separation of concerns:
+
+### Project Structure
+```
+src/
+├── index.js                    # Application entry point
+├── config/                     # Environment configurations
+├── core/                       # Domain core logic
+│   └── whatsapp/              # WhatsApp-specific modules
+├── services/                   # Application services
+├── models/                     # Data models
+├── repositories/              # Data access layer
+└── utils/                     # Shared utilities
+```
 
 ### Core Components
-1. **WhatsApp Connection**: Baileys-based connection with QR authentication and session persistence
-2. **Filter Engine**: Keyword-based filtering system with case-insensitive matching
-3. **Dual Notification System**:
-   - Real-time Telegram notifications
-   - Local JSON/TXT file storage organized by date and subgroup
-4. **Configuration Wizard**: Interactive setup for communities, subgroups, and keywords
-5. **PM2 Integration**: 24/7 process management with auto-restart and health checks
+1. **WhatsApp Connection**: Robust Baileys-based connection system
+2. **Message Handler**: Intelligent message processing
+3. **Filter Service**: Configurable keyword-based filtering
+4. **Notification Dispatcher**: Notification orchestration
+5. **Dual Storage**: Telegram + organized local files
+6. **Session Manager**: WhatsApp session management
 
 ### Expected File Structure
 ```
@@ -64,6 +87,9 @@ logs/
 │   └── ...
 config.json
 ecosystem.config.js
+tests/
+├── unit/
+└── integration/
 ```
 
 ### Configuration Schema
@@ -85,11 +111,21 @@ ecosystem.config.js
 
 ## Development Workflow
 
-1. **WhatsApp Integration**: Implement Baileys connection with QR authentication
-2. **Message Filtering**: Create keyword matching system for relevant message detection
-3. **Notification System**: Set up Telegram bot and local file storage
-4. **Process Management**: Configure PM2 for production deployment
-5. **Configuration Management**: Build interactive wizard with Inquirer
+### Current Status
+The project implements a complete Clean Architecture with all major components:
+
+1. **✅ WhatsApp Integration**: Full Baileys integration with session persistence
+2. **✅ Message Processing**: Comprehensive message handling and filtering
+3. **✅ Notification System**: Dual notification system (Telegram + local storage)
+4. **✅ Process Management**: PM2 configuration for production deployment
+5. **✅ Service Layer**: Complete service architecture with dependency injection
+6. **🚧 Testing**: Unit and integration tests in development
+7. **⏳ Deployment**: Raspberry Pi deployment planned
+
+### Testing Strategy
+- **Unit Tests**: Individual component testing with Mocha/Chai/Sinon
+- **Integration Tests**: End-to-end workflow testing
+- **POC Scripts**: `npm run poc` for quick WhatsApp connection testing
 
 ## Key Features
 
