@@ -29,9 +29,11 @@ Subgrupos: ["Passagens SUL", "Compra de Pontos", "Transferências"]
 Palavras-chave: ["100%", "bônus", "latam", "smiles"]
 ```
 
-### Sistema de Notificação Duplo
-- **Telegram**: Notificações em tempo real das ofertas encontradas
-- **Arquivo Local**: Backup diário organizado por data e subgrupo
+### Sistema de Notificação Flexível
+- **Telegram**: Notificações em tempo real das ofertas encontradas *(opcional)*
+- **Arquivo Local**: Backup diário organizado por data e subgrupo *(sempre disponível)*
+
+**Importante**: O sistema pode funcionar apenas com armazenamento em arquivos locais, sem a necessidade de configurar o Telegram. Durante a configuração interativa, basta escolher a opção de armazenamento em arquivos.
 
 ### Estrutura de Arquivos
 ```
@@ -123,10 +125,24 @@ Este script irá:
 
 ### 3. Configuração
 
-#### 3.1. Configuração de Ambiente (.env)
-Crie um arquivo `.env` com as seguintes variáveis:
+#### 3.1. Configuração Interativa (Recomendado)
+Execute o assistente de configuração interativa:
+```bash
+npm run config
+```
+
+Este assistente irá guiá-lo através da configuração do sistema, incluindo:
+- **Opções de notificação**: Você pode escolher entre Telegram, arquivos locais, ou ambos
+- **Configuração do bot do Telegram** (opcional)
+- **Grupos do WhatsApp para monitorar**
+- **Palavras-chave para filtrar ofertas**
+
+**Importante**: O sistema pode funcionar **apenas com armazenamento em arquivos locais**, sem a necessidade de configurar o Telegram. Durante a configuração interativa, basta não selecionar a opção do Telegram.
+
+#### 3.2. Configuração Manual de Ambiente (.env)
+Se preferir configurar manualmente, crie um arquivo `.env` com as seguintes variáveis:
 ```env
-# Telegram Bot Configuration
+# Telegram Bot Configuration (opcional)
 TELEGRAM_BOT_TOKEN=seu_token_do_bot_do_telegram
 TELEGRAM_CHAT_ID=seu_id_de_chat_do_telegram
 
@@ -153,8 +169,14 @@ Para obter o `TELEGRAM_CHAT_ID`:
 3. Acesse `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` no seu navegador
 4. Procure o campo `id` no JSON retornado
 
-#### 3.2. Configuração da Aplicação (config.json)
-Crie um arquivo `config.json` na raiz do projeto com a seguinte estrutura:
+#### 3.3. Configuração da Aplicação (config.json)
+O arquivo `config.json` será criado automaticamente pelo assistente de configuração. Se preferir criar manualmente, copie o arquivo `config.example.json` para `config.json` e edite conforme suas necessidades:
+
+```bash
+cp config.example.json config.json
+```
+
+Em seguida, edite o arquivo `config.json` com a seguinte estrutura:
 
 ```json
 {
@@ -200,6 +222,12 @@ Exemplo prático:
   "log_retention_days": 30
 }
 ```
+
+**Importante**: O sistema pode funcionar apenas com armazenamento em arquivos locais, sem a necessidade de configurar o Telegram. Basta definir:
+- `"telegram_enabled": false`
+- `"file_storage_enabled": true`
+
+**Nota**: O arquivo `config.json` está incluído no `.gitignore` para evitar que configurações pessoais sejam compartilhadas publicamente. Use `config.example.json` como referência para a estrutura.
 
 ### 4. Execução
 
@@ -266,6 +294,9 @@ npm start
 
 # Executar com wizard de configuração
 npm run config
+
+# Executar setup automático (inclui configuração)
+npm run setup
 
 # Testar conexão WhatsApp (POC)
 npm run poc

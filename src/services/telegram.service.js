@@ -18,13 +18,16 @@ class TelegramService {
   }
 
   async initialize() {
-    if (!env.TELEGRAM_BOT_TOKEN) {
-      notificationLogger.warn('Telegram bot token not provided, service disabled');
+    // Verificar se as variáveis de ambiente do Telegram estão definidas
+    if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_TOKEN.trim()) {
+      notificationLogger.info('Telegram bot token not provided, service disabled');
+      this.isEnabled = false;
       return;
     }
 
-    if (!this.chatId) {
-      notificationLogger.warn('Telegram chat ID not provided, service disabled');
+    if (!this.chatId || !this.chatId.trim()) {
+      notificationLogger.info('Telegram chat ID not provided, service disabled');
+      this.isEnabled = false;
       return;
     }
 
@@ -42,7 +45,9 @@ class TelegramService {
       this.startQueueProcessor();
       
     } catch (error) {
-      notificationLogger.logError('telegram_init', error);
+      notificationLogger.warn('Telegram service initialization failed, service disabled', { 
+        error: error.message 
+      });
       this.isEnabled = false;
     }
   }

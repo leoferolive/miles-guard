@@ -56,8 +56,15 @@ class NotificationDispatcherService extends EventEmitter {
       if (tasks.length > 0) {
         await Promise.allSettled(tasks);
       } else {
-        notificationLogger.warn('No notification methods enabled', {
+        notificationLogger.warn('No notification methods enabled, message will only be logged', {
           messageId: relevantMessage.id
+        });
+        // Mesmo sem métodos de notificação configurados, registrar a mensagem no log
+        notificationLogger.info('Relevant message detected', {
+          messageId: relevantMessage.id,
+          groupName: relevantMessage.groupName,
+          sender: relevantMessage.sender,
+          textPreview: relevantMessage.text.substring(0, 100) + (relevantMessage.text.length > 100 ? '...' : '')
         });
       }
 

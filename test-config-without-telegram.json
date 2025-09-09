@@ -1,0 +1,20 @@
+{
+  "comunidade": "#01 Comunidade Masters ✈️",
+  "subgrupos": [
+    "✈️ M01 - Passagens SUL",
+    "✈️ M01 - Passagens SUDESTE",
+    "♻️ M01 - Transferências Bonificadas"
+  ],
+  "palavras_chave": [
+    "100%",
+    "bônus",
+    "SMILES",
+    "Destino: Curitiba"
+  ],
+  "case_sensitive": false,
+  "rate_limit": 60,
+  "notification_enabled": true,
+  "telegram_enabled": false,
+  "file_storage_enabled": true,
+  "log_retention_days": 30
+}

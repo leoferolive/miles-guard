@@ -18,6 +18,9 @@ const MessageRepository = require('./repositories/message.repository');
 // Models
 const { MessageModel } = require('./models/message.model');
 
+// Interactive Config
+const InteractiveConfigService = require('./services/interactive-config.service');
+
 class MilesGuardApp {
   constructor() {
     this.services = {};
@@ -38,6 +41,9 @@ class MilesGuardApp {
       // Initialize services in dependency order
       await this.initializeServices();
       
+      // Check Telegram configuration and offer options if not configured
+      await this.checkTelegramConfiguration();
+      
       // Initialize WhatsApp connection
       await this.initializeWhatsApp();
       
@@ -56,6 +62,60 @@ class MilesGuardApp {
     } catch (error) {
       systemLogger.logError('app_initialization', error);
       throw error;
+    }
+  }
+
+  async checkTelegramConfiguration() {
+    try {
+      // Verificar se o Telegram está habilitado na configuração
+      const config = this.services.config.getConfig();
+      
+      // Se o Telegram estiver habilitado mas não configurado corretamente, 
+      // desativá-lo automaticamente e informar o usuário
+      if (config.telegram_enabled && (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_TOKEN.trim() || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_CHAT_ID.trim())) {
+        systemLogger.warn('Telegram está habilitado na configuração, mas não está configurado corretamente.');
+        systemLogger.warn('Desativando notificações via Telegram. O sistema continuará funcionando com armazenamento em arquivos.');
+        
+        // Atualizar a configuração para desativar o Telegram
+        config.telegram_enabled = false;
+        
+        // Garantir que pelo menos o armazenamento em arquivo esteja habilitado
+        if (!config.file_storage_enabled) {
+          systemLogger.info('Ativando armazenamento em arquivos como fallback.');
+          config.file_storage_enabled = true;
+          config.notification_enabled = true;
+          
+          // Salvar a configuração atualizada
+          await this.services.config.saveConfig(config);
+        }
+      }
+      
+      // Se nenhum método de notificação estiver habilitado, ativar o armazenamento em arquivos
+      if (!config.telegram_enabled && !config.file_storage_enabled) {
+        systemLogger.warn('Nenhum método de notificação está habilitado na configuração.');
+        systemLogger.info('Ativando armazenamento em arquivos locais como padrão.');
+        config.file_storage_enabled = true;
+        config.notification_enabled = true;
+        
+        // Salvar a configuração atualizada
+        await this.services.config.saveConfig(config);
+      }
+      
+      // Informar o usuário sobre a configuração atual
+      if (config.telegram_enabled) {
+        systemLogger.info('Notificações via Telegram: ATIVADO');
+      } else {
+        systemLogger.info('Notificações via Telegram: DESATIVADO');
+      }
+      
+      if (config.file_storage_enabled) {
+        systemLogger.info('Armazenamento em arquivos locais: ATIVADO');
+      } else {
+        systemLogger.info('Armazenamento em arquivos locais: DESATIVADO');
+      }
+      
+    } catch (error) {
+      systemLogger.logError('telegram_config_check', error);
     }
   }
 

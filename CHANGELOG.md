@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- ✅ **Interactive Configuration Wizard**: New `npm run config` command for easy setup
+- ✅ **Optional Telegram Configuration**: System now works without Telegram, saving only to local files
+- ✅ **Flexible Notification System**: Users can choose between Telegram, local files, or both
+
+### Changed
+- 🔧 **Enhanced Startup Process**: Automatic detection of missing Telegram configuration
+- 🔧 **Improved Documentation**: Updated README with new configuration options
+- 🔧 **Better Error Handling**: More informative messages when services are not configured
+
+## [1.0.0] - 2024-01-08
+
 ## [1.0.0] - 2024-01-08
 
 ### Added

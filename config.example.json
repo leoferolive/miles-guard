@@ -1,15 +1,13 @@
 {
-  "comunidade": "M01 Comunidade Masters",
+  "comunidade": "Nome da sua comunidade",
   "subgrupos": [
-    "Passagens SUL",
-    "Compra de Pontos",
-    "Transferências"
+    "Nome do Subgrupo 1",
+    "Nome do Subgrupo 2"
   ],
   "palavras_chave": [
-    "100%",
-    "bônus",
-    "latam",
-    "smiles"
+    "palavra1",
+    "palavra2",
+    "palavra3"
   ],
   "case_sensitive": false,
   "rate_limit": 60,
