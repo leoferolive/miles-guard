@@ -47,12 +47,19 @@ jobs:
       id: version
       run: |
         # Analisar commits desde a última tag para determinar tipo de bump
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        echo "Latest tag: $LATEST_TAG"
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
         
-        # Obter mensagens de commit desde a última tag
-        COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --no-merges)
-        echo "Commits since last tag:"
+        if [ -z "$LATEST_TAG" ]; then
+          # No tags found, get all commits
+          echo "No previous tags found, analyzing all commits"
+          COMMITS=$(git log --oneline --no-merges)
+        else
+          echo "Latest tag: $LATEST_TAG"
+          # Obter mensagens de commit desde a última tag
+          COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --no-merges)
+        fi
+        
+        echo "Commits to analyze:"
         echo "$COMMITS"
         
         # Determinar tipo de versão baseado nas mensagens de commit
