@@ -1,7 +1,7 @@
 {
   "name": "milesguard",
   "version": "1.0.0",
-  "description": "",
+  "description": "MilesGuard - Monitor automático de ofertas em grupos do WhatsApp com notificações via Telegram, usando dependências modernas e atualizadas",
   "main": "src/index.js",
   "engines": {
     "node": ">=20.0.0"

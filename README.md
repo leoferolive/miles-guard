@@ -435,7 +435,7 @@ npm run monit
 ## 📦 Dependências Principais
 
 - **@whiskeysockets/baileys**: WhatsApp Web API para conexão e manipulação de mensagens
-- **node-telegram-bot-api**: Notificações via Telegram
+- **telegraf**: Notificações via Telegram (substitui node-telegram-bot-api para usar fetch moderno)
 - **winston**: Sistema de logging estruturado
 - **inquirer**: Wizard interativo de configuração
 - **qrcode-terminal**: Autenticação via QR Code no WhatsApp
