@@ -18,11 +18,11 @@ const consoleFormat = winston.format.combine(
   winston.format.printf(({ timestamp, level, message, component, event, data, stack }) => {
     let coloredLevel;
     switch (level) {
-      case 'error': coloredLevel = chalk.red.bold('ERROR'); break;
-      case 'warn': coloredLevel = chalk.yellow.bold('WARN '); break;
-      case 'info': coloredLevel = chalk.blue.bold('INFO '); break;
-      case 'debug': coloredLevel = chalk.gray.bold('DEBUG'); break;
-      default: coloredLevel = level.toUpperCase();
+    case 'error': coloredLevel = chalk.red.bold('ERROR'); break;
+    case 'warn': coloredLevel = chalk.yellow.bold('WARN '); break;
+    case 'info': coloredLevel = chalk.blue.bold('INFO '); break;
+    case 'debug': coloredLevel = chalk.gray.bold('DEBUG'); break;
+    default: coloredLevel = level.toUpperCase();
     }
 
     let output = `${chalk.gray(timestamp)} ${coloredLevel}`;

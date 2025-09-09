@@ -71,12 +71,12 @@ class TelegramService {
     const template = options.template || 'individual';
     
     switch (template) {
-      case 'individual':
-        return this.formatIndividualMessage(relevantMessage);
-      case 'summary':
-        return this.formatSummaryMessage(relevantMessage);
-      default:
-        return this.formatIndividualMessage(relevantMessage);
+    case 'individual':
+      return this.formatIndividualMessage(relevantMessage);
+    case 'summary':
+      return this.formatSummaryMessage(relevantMessage);
+    default:
+      return this.formatIndividualMessage(relevantMessage);
     }
   }
 
@@ -85,7 +85,7 @@ class TelegramService {
     const keywords = message.matchedKeywords || [];
     const keywordTags = keywords.map(k => `#${k.replace(/\s+/g, '_')}`).join(' ');
     
-    let text = `🎯 *Oferta Detectada*\n\n`;
+    let text = '🎯 *Oferta Detectada*\n\n';
     text += `📱 *Grupo:* ${message.groupName}\n`;
     text += `👤 *De:* ${message.sender}\n`;
     text += `🕐 *Hora:* ${timestamp}\n`;
@@ -94,7 +94,7 @@ class TelegramService {
       text += `🔍 *Palavras-chave:* ${keywordTags}\n`;
     }
     
-    text += `\n💬 *Mensagem:*\n`;
+    text += '\n💬 *Mensagem:*\n';
     text += `\`\`\`\n${message.text.substring(0, 1000)}${message.text.length > 1000 ? '\n...' : ''}\n\`\`\``;
     
     if (message.text.length > 1000) {
@@ -105,7 +105,7 @@ class TelegramService {
   }
 
   formatSummaryMessage(data) {
-    let text = `📊 *Resumo de Ofertas*\n\n`;
+    let text = '📊 *Resumo de Ofertas*\n\n';
     
     if (data.period) {
       text += `📅 *Período:* ${data.period}\n`;
@@ -116,14 +116,14 @@ class TelegramService {
     }
     
     if (data.topGroups && data.topGroups.length > 0) {
-      text += `\n🏆 *Grupos mais ativos:*\n`;
+      text += '\n🏆 *Grupos mais ativos:*\n';
       data.topGroups.forEach((group, index) => {
         text += `${index + 1}. ${group.name}: ${group.count} mensagens\n`;
       });
     }
     
     if (data.topKeywords && data.topKeywords.length > 0) {
-      text += `\n🔍 *Palavras-chave mais encontradas:*\n`;
+      text += '\n🔍 *Palavras-chave mais encontradas:*\n';
       data.topKeywords.forEach((keyword, index) => {
         text += `${index + 1}. #${keyword.word}: ${keyword.count}x\n`;
       });
@@ -213,7 +213,7 @@ class TelegramService {
   }
 
   formatStatusMessage(status) {
-    let text = `🤖 *MilesGuard Status*\n\n`;
+    let text = '🤖 *MilesGuard Status*\n\n';
     text += `🟢 *Status:* ${status.isConnected ? 'Conectado' : 'Desconectado'}\n`;
     text += `⏱️ *Uptime:* ${status.uptime || 'N/A'}\n`;
     text += `📊 *Grupos monitorados:* ${status.targetGroupsCount || 0}\n`;

@@ -279,16 +279,6 @@ class FilterService {
         (this.stats.messagesMatched / this.stats.messagesProcessed * 100).toFixed(2) : 0
     };
   }
-
-  resetStats() {
-    this.stats = {
-      messagesProcessed: 0,
-      messagesMatched: 0,
-      messagesRejected: 0,
-      keywordMatches: new Map(),
-      groupMatches: new Map()
-    };
-  }
 }
 
 module.exports = FilterService;

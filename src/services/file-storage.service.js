@@ -266,16 +266,16 @@ class FileStorageService {
   }
 
   generateDailySummaryText(date, data) {
-    let summary = `# RESUMO DIÁRIO - MilesGuard\n`;
+    let summary = '# RESUMO DIÁRIO - MilesGuard\n';
     summary += `Data: ${new Date(date).toLocaleDateString('pt-BR')}\n`;
     summary += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
     
-    summary += `## 📊 ESTATÍSTICAS GERAIS\n`;
+    summary += '## 📊 ESTATÍSTICAS GERAIS\n';
     summary += `Total de mensagens relevantes: ${data.totalMessages}\n`;
     summary += `Grupos monitorados: ${Object.keys(data.groups).length}\n\n`;
     
     if (Object.keys(data.groups).length > 0) {
-      summary += `## 📱 ATIVIDADE POR GRUPO\n`;
+      summary += '## 📱 ATIVIDADE POR GRUPO\n';
       const groupEntries = Object.entries(data.groups)
         .sort(([,a], [,b]) => b.count - a.count);
       
@@ -294,7 +294,7 @@ class FileStorageService {
     }
     
     if (data.keywords.size > 0) {
-      summary += `\n## 🔍 TOP PALAVRAS-CHAVE\n`;
+      summary += '\n## 🔍 TOP PALAVRAS-CHAVE\n';
       const topKeywords = Array.from(data.keywords.entries())
         .sort(([,a], [,b]) => b - a)
         .slice(0, 10);
@@ -310,13 +310,13 @@ class FileStorageService {
       .sort(([,a], [,b]) => b - a);
     
     if (activeHours.length > 0) {
-      summary += `\n## ⏰ ATIVIDADE POR HORA\n`;
+      summary += '\n## ⏰ ATIVIDADE POR HORA\n';
       for (const [hour, count] of activeHours.slice(0, 5)) {
         summary += `- ${hour}h: ${count} mensagens\n`;
       }
     }
     
-    summary += `\n---\nRelatório gerado automaticamente pelo MilesGuard\n`;
+    summary += '\n---\nRelatório gerado automaticamente pelo MilesGuard\n';
     
     return summary;
   }

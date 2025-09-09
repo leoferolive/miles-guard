@@ -162,7 +162,7 @@ class MessageRepository {
   async getMessagesByKeyword(keyword, dateRange = null, groupName = null) {
     try {
       const dates = dateRange ? this.getDateRange(dateRange.start, dateRange.end) : 
-                                this.getRecentDateStrings(7);
+        this.getRecentDateStrings(7);
       
       const results = [];
       
