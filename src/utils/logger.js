@@ -1,6 +1,7 @@
 const winston = require('winston');
 const path = require('path');
-const chalk = require('chalk');
+const chalkModule = require('chalk');
+const chalk = chalkModule.default || chalkModule;
 const env = require('../config/environment');
 
 // Ensure logs directory exists
@@ -37,7 +38,12 @@ const consoleFormat = winston.format.combine(
     output += ` ${message}`;
     
     if (data) {
-      output += `\n${chalk.gray(JSON.stringify(data, null, 2))}`;
+      try {
+        output += `\n${chalk.gray(JSON.stringify(data, null, 2))}`;
+      } catch (error) {
+        // Handle circular references and non-serializable objects
+        output += `\n${chalk.gray('[Complex Object - Unable to stringify]')}`;
+      }
     }
     
     if (stack) {
@@ -93,11 +99,14 @@ function createComponentLogger(componentName) {
     },
     
     logError: (event, error, data = null) => {
-      logger.error(`${event}: ${error.message}`, { 
+      const errorMessage = error?.message || String(error || 'Unknown error');
+      const errorStack = error?.stack || null;
+      
+      logger.error(`${event}: ${errorMessage}`, { 
         component: componentName, 
         event, 
         data,
-        stack: error.stack 
+        stack: errorStack 
       });
     }
   };

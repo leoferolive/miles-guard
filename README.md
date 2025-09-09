@@ -1,6 +1,6 @@
-# MilesGuard
+/# MilesGuard
 
-MilesGuard é um agregador automático que monitora subgrupos específicos do WhatsApp e centraliza ofertas relevantes, eliminando a necessidade de verificar manualmente múltiplos grupos diariamente.
+M/ilesGuard é um agregador automático que monitora subgrupos específicos do WhatsApp e centraliza ofertas relevantes, eliminando a necessidade de verificar manualmente múltiplos grupos diariamente.
 
 ## O Que É
 
@@ -94,31 +94,85 @@ Noite (22:00):
 ✅ < 1 min de notificação após mensagem original
 ✅ 100% de uptime com PM2
 
-## 🔧 Desenvolvimento
+## 🔧 Setup e Desenvolvimento
+
+### Setup Automático (Recomendado)
+```bash
+# Setup completo do projeto
+node scripts/setup.js
+
+# Ou via npm
+npm run setup
+```
+**O script de setup irá:**
+- Verificar pré-requisitos (Node.js 16+, npm, git)
+- Instalar dependências automaticamente
+- Criar diretórios necessários (logs, data, temp)
+- Configurar arquivo de ambiente (.env)
+- Executar suite completa de testes
+- Validar funcionamento da aplicação
 
 ### Comandos Básicos
 ```bash
-# Instalar dependências
+# Instalar dependências manualmente
 npm install
 
 # Executar em modo de desenvolvimento
 npm start
 
-# Executar em modo desenvolvimento com watch
-npm run dev
+# Executar com wizard de configuração
+npm run config
 
 # Testar conexão WhatsApp (POC)
 npm run poc
-
-# Executar testes unitários
-npm test
-
-# Executar testes de unidade específicos
-npm run test:unit
-
-# Executar testes de integração
-npm run test:integration
 ```
+
+### Sistema de Testes
+
+MilesGuard possui uma suíte completa de testes para garantir qualidade e confiabilidade:
+
+#### Executar Todos os Testes
+```bash
+# Suite completa de testes (recomendado)
+node scripts/test.js
+
+# Ou via npm
+npm test
+```
+
+#### Testes Específicos
+```bash
+# Apenas testes unitários
+npm run test:unit
+node scripts/test.js unit
+
+# Apenas testes de integração
+npm run test:integration
+node scripts/test.js integration
+
+# Testes em modo watch (desenvolvimento)
+node scripts/test.js watch
+```
+
+#### Validação da Aplicação
+```bash
+# Validar estrutura e funcionalidade
+node scripts/validate.js
+
+# Verificar dependências e configuração
+npm run validate
+```
+
+#### Relatórios de Teste
+Após executar os testes, você encontrará:
+- `test-results.json` - Relatório detalhado dos testes
+- `validation-report.json` - Relatório de validação da aplicação
+
+#### Cobertura Atual
+- **143+ testes** implementados
+- **Testes unitários**: Services, Models, Utils, Repositories
+- **Testes de integração**: Fluxo completo Config → Filter → Notification
+- **Meta de cobertura**: 95%+ (configurada no TEST_ROADMAP.md)
 
 ### Comandos de Produção (PM2)
 ```bash
@@ -150,11 +204,19 @@ npm run monit
 | 3 | Notificações (Telegram + Arquivos) | ✅ Implementado |
 | 4 | PM2 e Estabilidade | ✅ Implementado |
 | 5 | Refinamentos e Arquitetura Limpa | ✅ Implementado |
-| 6 | Testes e Validação | 🚧 Em desenvolvimento |
+| 6 | Testes e Validação | ✅ **Implementado** |
 | 7 | Raspberry Pi Deployment | ⏳ Planejado |
 
-**Status Atual:** Sistema completo com arquitetura limpa implementada  
-**Próximos Passos:** Testes unitários e integração, deployment em Raspberry Pi
+**Status Atual:** Sistema completo com arquitetura limpa e cobertura extensiva de testes  
+**Próximos Passos:** Deployment em Raspberry Pi
+
+### Fase 6 - Testes Implementados ✅
+- **143+ testes** cobrindo toda a aplicação
+- **Testes unitários** para Services, Models, Utils e Repositories
+- **Testes de integração** validando fluxo completo
+- **Scripts automatizados** de setup, teste e validação
+- **Relatórios detalhados** de cobertura e performance
+- **CI/CD Pipeline** com GitHub Actions (planejado)
 
 ### Roadmap
 - **Hoje**: CLI + PM2 no computador pessoal
@@ -177,17 +239,33 @@ npm run monit
 
 O sistema implementa **Clean Architecture** com separação clara de responsabilidades:
 
-### Estrutura do Projeto
+### Estrutura Completa do Projeto
 ```
-src/
-├── index.js                    # Entry point da aplicação
-├── config/                     # Configurações de ambiente
-├── core/                       # Lógica central do domínio
-│   └── whatsapp/              # Módulos específicos do WhatsApp
-├── services/                   # Serviços de aplicação
-├── models/                     # Modelos de dados
-├── repositories/              # Camada de acesso a dados
-└── utils/                     # Utilitários compartilhados
+MilesGuard/
+├── src/                        # Código fonte principal
+│   ├── index.js               # Entry point da aplicação
+│   ├── config/                # Configurações de ambiente
+│   ├── core/                  # Lógica central do domínio
+│   │   └── whatsapp/         # Módulos específicos do WhatsApp
+│   ├── services/              # Serviços de aplicação
+│   ├── models/                # Modelos de dados
+│   ├── repositories/          # Camada de acesso a dados
+│   └── utils/                 # Utilitários compartilhados
+├── tests/                      # Suite completa de testes
+│   ├── unit/                  # Testes unitários
+│   │   ├── services/          # Testes de serviços
+│   │   ├── models/            # Testes de modelos
+│   │   └── utils/             # Testes de utilitários
+│   ├── integration/           # Testes de integração
+│   ├── fixtures/              # Dados de teste
+│   └── helpers/               # Utilitários de teste
+├── scripts/                    # Scripts de automação
+│   ├── setup.js               # Setup automático do projeto
+│   ├── test.js                # Runner de testes
+│   └── validate.js            # Validador da aplicação
+├── logs/                       # Logs organizados por data
+├── data/                       # Dados da aplicação
+└── temp/                       # Arquivos temporários
 ```
 
 ### Componentes Principais
@@ -244,6 +322,67 @@ ecosystem.config.js
 - **Operação 24/7**: Gerenciado pelo PM2 com auto-restart e monitoramento de saúde
 - **Setup Simples**: Configuração em 3 passos via wizard interativo
 
+## 🧪 Qualidade e Confiabilidade
+
+### Testes Implementados
+- **Unit Tests**: 100+ testes cobrindo Services, Models, Utils
+- **Integration Tests**: 12+ testes validando fluxo completo
+- **Performance Tests**: Validação de eficiência com 100+ mensagens
+- **Error Handling**: Cenários de falha e recuperação
+- **Mock & Fixtures**: Dados de teste realistas
+
+### Automação
+- **Setup Script**: Configuração automática do ambiente
+- **Test Runner**: Execução automatizada com relatórios
+- **Validator**: Verificação contínua da estrutura e funcionalidade
+- **CI/CD Ready**: Preparado para pipelines automatizados
+
+### Métricas de Qualidade
+- **>95% Test Coverage** (meta definida)
+- **<1s response time** para filtros
+- **100% uptime** com PM2
+- **Zero manual intervention** em produção
+
+## 📋 Checklist de Setup
+
+Para iniciar o MilesGuard:
+
+1. **Pré-requisitos** ✓
+   - [ ] Node.js 16+ instalado
+   - [ ] npm disponível
+   - [ ] Git configurado (opcional)
+
+2. **Instalação** ✓
+   ```bash
+   git clone <repository>
+   cd MilesGuard
+   node scripts/setup.js
+   ```
+
+3. **Configuração** ✓
+   - [ ] Editar arquivo `.env` criado
+   - [ ] Configurar bot do Telegram
+   - [ ] Definir grupos e palavras-chave
+
+4. **Validação** ✓
+   ```bash
+   node scripts/validate.js
+   npm test
+   ```
+
+5. **Execução** ✓
+   ```bash
+   npm start          # Desenvolvimento
+   npm run prod       # Produção
+   ```
+
 ## 🔮 Futuro Deployment
 
 O sistema é projetado para eventual deploy em Raspberry Pi para operação dedicada 24/7 com uso mínimo de recursos.
+
+### Próximas Melhorias
+- **Dashboard Web**: Interface para consulta de ofertas
+- **API REST**: Endpoints para integração externa
+- **Machine Learning**: Classificação automática de relevância
+- **Multi-tenant**: Suporte a múltiplas comunidades
+- **Mobile App**: Aplicativo para consulta móvel

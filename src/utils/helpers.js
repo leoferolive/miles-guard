@@ -88,7 +88,7 @@ function createExponentialBackoff(baseDelay, maxDelay, maxAttempts) {
 }
 
 function isValidGroupId(groupId) {
-  return groupId && typeof groupId === 'string' && groupId.includes('@g.us');
+  return !!(groupId && typeof groupId === 'string' && groupId.length > 0 && groupId.includes('@g.us'));
 }
 
 function extractGroupName(group) {
@@ -106,9 +106,11 @@ function createMessageFingerprint(message) {
   
   if (!text) return null;
   
-  // Create a simple hash-like fingerprint
-  const content = `${sender}-${text.substring(0, 100)}-${Math.floor(timestamp / 60)}`; // Group by minute
-  return Buffer.from(content).toString('base64').substring(0, 16);
+  // Create a simple hash-like fingerprint with full text to ensure uniqueness
+  const content = `${sender}-${text}-${Math.floor(timestamp / 60)}`; // Group by minute
+  const base64 = Buffer.from(content).toString('base64');
+  // Use more characters to reduce collisions
+  return base64.substring(0, Math.min(24, base64.length));
 }
 
 function validateEnvVariables(requiredVars) {

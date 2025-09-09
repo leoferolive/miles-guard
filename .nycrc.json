@@ -1,0 +1,30 @@
+{
+  "all": true,
+  "include": [
+    "src/**/*.js"
+  ],
+  "exclude": [
+    "tests/**",
+    "node_modules/**",
+    "coverage/**",
+    "logs/**",
+    "auth_info/**",
+    "auth_info_poc/**",
+    "poc.js",
+    "poc-functions.js"
+  ],
+  "reporter": [
+    "html",
+    "text",
+    "lcov",
+    "json"
+  ],
+  "report-dir": "./coverage",
+  "check-coverage": true,
+  "lines": 85,
+  "statements": 85,
+  "functions": 85,
+  "branches": 80,
+  "cache": true,
+  "temp-dir": "./coverage/.nyc_output"
+}

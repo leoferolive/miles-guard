@@ -84,15 +84,15 @@ class ConfigService {
       return this.schema.parse(config);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+        const errorMessages = error.issues?.map(err => `${err.path.join('.')}: ${err.message}`) || [error.message];
         throw new Error(`Configuração inválida:\n${errorMessages.join('\n')}`);
       }
-      throw error;
+      throw new Error(`Configuração inválida: ${error.message}`);
     }
   }
 
   isTargetGroup(groupName) {
-    if (!this.config) return false;
+    if (!this.config || !groupName) return false;
     
     const normalizedGroupName = groupName.toLowerCase();
     return this.config.subgrupos.some(subgrupo => 

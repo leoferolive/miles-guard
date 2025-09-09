@@ -16,12 +16,16 @@
     "resurrect": "pm2 resurrect",
     "flush-logs": "pm2 flush milesguard",
     "health": "node scripts/health-check.js",
-    "test": "NODE_ENV=test mocha tests/**/*.test.js",
-    "test:unit": "NODE_ENV=test mocha tests/unit/**/*.test.js",
-    "test:integration": "NODE_ENV=test mocha tests/integration/**/*.test.js",
+    "setup": "node scripts/setup.js",
+    "validate": "node scripts/validate.js",
+    "test": "node scripts/test.js",
+    "test:unit": "cross-env NODE_ENV=test mocha tests/unit/**/*.test.js --timeout 5000 --recursive",
+    "test:integration": "cross-env NODE_ENV=test mocha tests/integration/**/*.test.js --timeout 15000 --recursive",
+    "test:coverage": "cross-env NODE_ENV=test nyc mocha tests/**/*.test.js --timeout 10000 --recursive",
+    "test:watch": "cross-env NODE_ENV=test mocha tests/**/*.test.js --timeout 10000 --recursive --watch",
     "poc": "node poc.js",
     "version:patch": "npm version patch",
-    "version:minor": "npm version minor", 
+    "version:minor": "npm version minor",
     "version:major": "npm version major",
     "version:check": "echo \"Current version: $(node -p 'require(\\\"./package.json\\\").version')\"",
     "changelog": "git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges"
@@ -50,8 +54,12 @@
   },
   "devDependencies": {
     "chai": "^6.0.1",
+    "cross-env": "^7.0.3",
     "mocha": "^11.7.2",
+    "nyc": "^17.1.0",
+    "pm2": "^5.3.0",
     "sinon": "^21.0.0",
-    "pm2": "^5.3.0"
+    "sinon-chai": "^4.0.1",
+    "supertest": "^7.0.0"
   }
 }

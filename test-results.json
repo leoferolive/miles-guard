@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-09-09T03:06:33.231Z",
+  "duration": 5732,
+  "results": {
+    "unit": {
+      "models": {
+        "passing": 36,
+        "failing": 0,
+        "pending": 0,
+        "duration": 32
+      },
+      "utils": {
+        "passing": 0,
+        "failing": 0,
+        "pending": 0
+      }
+    },
+    "integration": {
+      "passing": 0,
+      "failing": 0,
+      "pending": 0
+    },
+    "total": {
+      "passing": 36,
+      "failing": 0,
+      "pending": 0
+    }
+  },
+  "summary": {
+    "total": 36,
+    "passing": 36,
+    "failing": 0,
+    "pending": 0,
+    "successRate": 100
+  }
+}

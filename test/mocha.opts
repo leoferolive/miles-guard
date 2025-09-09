@@ -1,0 +1,4 @@
+--timeout 10000
+--recursive
+--require tests/helpers/test-setup.js
+tests/**/*.test.js
