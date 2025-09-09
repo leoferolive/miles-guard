@@ -3,6 +3,9 @@ const { systemLogger } = require('../utils/logger');
 
 class FilterService {
   constructor(configService) {
+    if (!configService) {
+      throw new Error('ConfigService é obrigatório');
+    }
     this.configService = configService;
     this.pausedGroups = new Set();
     this.pausedKeywords = new Set();
@@ -18,6 +21,11 @@ class FilterService {
 
   shouldProcessMessage(message, groupName) {
     try {
+      // Input validation
+      if (!message) {
+        return { shouldProcess: false, reason: 'invalid_message' };
+      }
+
       this.stats.messagesProcessed++;
 
       // Check if globally paused
@@ -183,19 +191,6 @@ class FilterService {
     systemLogger.info('Filter statistics reset');
   }
 
-  // Configuration helpers
-  getCurrentFilters() {
-    const config = this.configService.getConfig();
-    return {
-      targetGroups: config.subgrupos,
-      keywords: config.palavras_chave,
-      caseSensitive: config.case_sensitive,
-      pausedGroups: Array.from(this.pausedGroups),
-      pausedKeywords: Array.from(this.pausedKeywords),
-      globalPaused: this.globalPaused
-    };
-  }
-
   validateMessage(message) {
     if (!message) return false;
     if (!message.text || typeof message.text !== 'string') return false;
@@ -246,6 +241,53 @@ class FilterService {
     }
 
     return analysis;
+  }
+
+  // Legacy methods for backward compatibility with tests
+  getMatchedKeywords(text) {
+    const result = this.matchesKeywords(text);
+    return result.matchedKeywords;
+  }
+
+  filterMessages(messages) {
+    if (!messages || !Array.isArray(messages)) {
+      return [];
+    }
+
+    return messages.filter(message => {
+      if (!message || !message.groupName) return false;
+      const result = this.shouldProcessMessage(message, message.groupName);
+      return result.shouldProcess;
+    });
+  }
+
+  createRelevantMessage(message) {
+    const matchedKeywords = this.getMatchedKeywords(message.text);
+    return {
+      ...message,
+      timestamp: message.timestamp || Date.now(),
+      matchedKeywords,
+      isRelevant: true
+    };
+  }
+
+  getFilterStats() {
+    return {
+      totalProcessed: this.stats.messagesProcessed,
+      relevantFound: this.stats.messagesMatched,
+      relevantRate: this.stats.messagesProcessed > 0 ? 
+        (this.stats.messagesMatched / this.stats.messagesProcessed * 100).toFixed(2) : 0
+    };
+  }
+
+  resetStats() {
+    this.stats = {
+      messagesProcessed: 0,
+      messagesMatched: 0,
+      messagesRejected: 0,
+      keywordMatches: new Map(),
+      groupMatches: new Map()
+    };
   }
 }
 

@@ -23,6 +23,9 @@
     "test:integration": "cross-env NODE_ENV=test mocha tests/integration/**/*.test.js --timeout 15000 --recursive",
     "test:coverage": "cross-env NODE_ENV=test nyc mocha tests/**/*.test.js --timeout 10000 --recursive",
     "test:watch": "cross-env NODE_ENV=test mocha tests/**/*.test.js --timeout 10000 --recursive --watch",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "build": "node --check src/index.js",
     "poc": "node poc.js",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
@@ -53,8 +56,10 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "audit-ci": "^7.1.0",
     "chai": "^6.0.1",
     "cross-env": "^7.0.3",
+    "eslint": "^8.57.1",
     "mocha": "^11.7.2",
     "nyc": "^17.1.0",
     "pm2": "^5.3.0",

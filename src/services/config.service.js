@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const { z } = require('zod');
+const { normalizeText } = require('../utils/helpers');
 
 const configSchema = z.object({
   comunidade: z.string().min(1, 'Nome da comunidade é obrigatório'),
@@ -34,7 +35,7 @@ class ConfigService {
       return this.config;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+        const errorMessages = error.issues?.map(err => `${err.path.join('.')}: ${err.message}`) || [error.message || 'Invalid configuration'];
         throw new Error(`Configuração inválida:\n${errorMessages.join('\n')}`);
       }
       throw error;
@@ -52,7 +53,7 @@ class ConfigService {
       return validatedConfig;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`);
+        const errorMessages = error.issues?.map(err => `${err.path.join('.')}: ${err.message}`) || [error.message || 'Invalid configuration'];
         throw new Error(`Configuração inválida:\n${errorMessages.join('\n')}`);
       }
       throw error;
@@ -84,7 +85,7 @@ class ConfigService {
       return this.schema.parse(config);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessages = error.issues?.map(err => `${err.path.join('.')}: ${err.message}`) || [error.message];
+        const errorMessages = error.issues?.map(err => `${err.path.join('.')}: ${err.message}`) || [error.message || 'Invalid configuration'];
         throw new Error(`Configuração inválida:\n${errorMessages.join('\n')}`);
       }
       throw new Error(`Configuração inválida: ${error.message}`);
@@ -104,10 +105,10 @@ class ConfigService {
   matchesKeywords(text) {
     if (!this.config || !text) return false;
     
-    const searchText = this.config.case_sensitive ? text : text.toLowerCase();
+    const searchText = this.config.case_sensitive ? text : normalizeText(text);
     
     return this.config.palavras_chave.some(keyword => {
-      const searchKeyword = this.config.case_sensitive ? keyword : keyword.toLowerCase();
+      const searchKeyword = this.config.case_sensitive ? keyword : normalizeText(keyword);
       return searchText.includes(searchKeyword);
     });
   }
@@ -115,10 +116,10 @@ class ConfigService {
   getMatchedKeywords(text) {
     if (!this.config || !text) return [];
     
-    const searchText = this.config.case_sensitive ? text : text.toLowerCase();
+    const searchText = this.config.case_sensitive ? text : normalizeText(text);
     
     return this.config.palavras_chave.filter(keyword => {
-      const searchKeyword = this.config.case_sensitive ? keyword : keyword.toLowerCase();
+      const searchKeyword = this.config.case_sensitive ? keyword : normalizeText(keyword);
       return searchText.includes(searchKeyword);
     });
   }

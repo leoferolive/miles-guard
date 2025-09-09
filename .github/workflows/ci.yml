@@ -27,10 +27,10 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Run linter (if available)
+    - name: Run linter
       run: |
-        if npm run lint --silent 2>/dev/null; then
-          npm run lint
+        if [ -f .eslintrc.js ] || [ -f .eslintrc.json ]; then
+          npx eslint src/**/*.js
         else
           echo "No linter configured, skipping..."
         fi
@@ -71,10 +71,13 @@ jobs:
       
     - name: Check for vulnerabilities
       run: |
-        if command -v npx &> /dev/null; then
-          npx audit-ci --moderate
+        if npx audit-ci --moderate; then
+          echo "✅ No moderate or high severity vulnerabilities found"
+        else
+          echo "❌ Moderate or high severity vulnerabilities found"
+          exit 1
         fi
-      continue-on-error: true
+      continue-on-error: false
 
   version-check:
     runs-on: ubuntu-latest

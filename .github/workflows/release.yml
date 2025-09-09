@@ -8,6 +8,10 @@ on:
       - 'CLAUDE.md'
       - 'docs/**'
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -91,12 +95,10 @@ jobs:
         git push origin --tags
         
     - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: ncipollo/release-action@v1
       with:
-        tag_name: v${{ steps.new_version.outputs.new_version }}
-        release_name: Release v${{ steps.new_version.outputs.new_version }}
+        tag: v${{ steps.new_version.outputs.new_version }}
+        name: Release v${{ steps.new_version.outputs.new_version }}
         body: |
           ## 🚀 Release v${{ steps.new_version.outputs.new_version }}
           

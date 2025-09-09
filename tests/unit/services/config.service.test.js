@@ -316,8 +316,10 @@ describe('ConfigService', () => {
     it('should respect case sensitivity setting', () => {
       configService.config = mockConfigs.caseSensitiveConfig;
       
+      // Should match 'BONUS' (exact case)
       const resultMatch = configService.matchesKeywords('BONUS na LATAM');
-      const resultNoMatch = configService.matchesKeywords('bonus na latam');
+      // Should NOT match because 'bonus' doesn't match 'BONUS' in case sensitive mode
+      const resultNoMatch = configService.matchesKeywords('bonus na LATAM');
       
       expect(resultMatch).to.be.true;
       expect(resultNoMatch).to.be.false;
