@@ -1,6 +1,6 @@
-/# MilesGuard
+# MilesGuard
 
-M/ilesGuard é um agregador automático que monitora subgrupos específicos do WhatsApp e centraliza ofertas relevantes, eliminando a necessidade de verificar manualmente múltiplos grupos diariamente.
+MilesGuard é um agregador automático que monitora subgrupos específicos do WhatsApp e centraliza ofertas relevantes, eliminando a necessidade de verificar manualmente múltiplos grupos diariamente.
 
 ## O Que É
 
@@ -154,13 +154,7 @@ Para obter o `TELEGRAM_CHAT_ID`:
 4. Procure o campo `id` no JSON retornado
 
 #### 3.2. Configuração da Aplicação (config.json)
-Crie um arquivo `config.json` na raiz do projeto com a seguinte estrutura. Você pode usar o arquivo `config.example.json` como base:
-
-```bash
-cp config.example.json config.json
-```
-
-Em seguida, edite o arquivo `config.json` com suas configurações:
+Crie um arquivo `config.json` na raiz do projeto com a seguinte estrutura:
 
 ```json
 {
@@ -206,17 +200,6 @@ Exemplo prático:
   "log_retention_days": 30
 }
 ```
-
-##### Explicação dos campos:
-- **comunidade**: Nome da comunidade do WhatsApp que você deseja monitorar
-- **subgrupos**: Lista dos nomes dos subgrupos que deseja monitorar (pode ser parte do nome)
-- **palavras_chave**: Lista de palavras-chave que determinam se uma mensagem é relevante
-- **case_sensitive**: Se true, diferencia maiúsculas de minúsculas nas palavras-chave
-- **rate_limit**: Limite de mensagens por minuto (1-300)
-- **notification_enabled**: Se true, habilita notificações (Telegram e/ou arquivo)
-- **telegram_enabled**: Se true, envia notificações via Telegram
-- **file_storage_enabled**: Se true, salva mensagens em arquivos locais
-- **log_retention_days**: Número de dias para manter os logs (1-365)
 
 ### 4. Execução
 
@@ -329,53 +312,6 @@ Após executar os testes, você encontrará:
 - `test-results.json` - Relatório detalhado dos testes
 - `validation-report.json` - Relatório de validação da aplicação
 
-## 🛠️ Troubleshooting
-
-Se encontrar problemas:
-
-1. **Verifique se todos os pré-requisitos estão instalados**
-   ```bash
-   node --version  # Deve ser v20 ou superior
-   npm --version
-   ```
-
-2. **Certifique-se de que as credenciais do Telegram estão corretas**
-   - Verifique se o `TELEGRAM_BOT_TOKEN` está correto
-   - Confirme se o `TELEGRAM_CHAT_ID` está correto
-   - Teste se o bot está funcionando mandando uma mensagem para ele no Telegram
-
-3. **Verifique se o WhatsApp está conectado**
-   - Na primeira execução, escaneie o QR Code quando solicitado
-   - Se tiver problemas de conexão, apague a pasta `auth_info` e reinicie
-
-4. **Confira os logs em `logs/milesguard.log` para mensagens de erro**
-
-5. **Execute `npm run validate` para verificar a configuração**
-   ```bash
-   npm run validate
-   ```
-
-6. **Verifique permissões de diretório**
-   - Certifique-se de que o aplicativo tem permissão para escrever nos diretórios `logs/` e `data/`
-
-## 🧪 Testando a Aplicação
-
-Para garantir que tudo está funcionando corretamente:
-
-```bash
-# Executar todos os testes
-npm test
-
-# Executar apenas testes unitários
-npm run test:unit
-
-# Executar apenas testes de integração
-npm run test:integration
-
-# Executar testes em modo watch (durante desenvolvimento)
-npm run test:watch
-```
-
 #### Cobertura Atual
 - **143+ testes** implementados
 - **Testes unitários**: Services, Models, Utils, Repositories
@@ -435,7 +371,7 @@ npm run monit
 ## 📦 Dependências Principais
 
 - **@whiskeysockets/baileys**: WhatsApp Web API para conexão e manipulação de mensagens
-- **telegraf**: Notificações via Telegram (substitui node-telegram-bot-api para usar fetch moderno)
+- **node-telegram-bot-api**: Notificações via Telegram
 - **winston**: Sistema de logging estruturado
 - **inquirer**: Wizard interativo de configuração
 - **qrcode-terminal**: Autenticação via QR Code no WhatsApp
@@ -579,76 +515,38 @@ Cada arquivo JSON contém as mensagens relevantes encontradas naquele subgrupo n
 - **100% uptime** com PM2
 - **Zero manual intervention** em produção
 
-## 📋 Checklist Completo de Setup
+## 📋 Checklist de Setup
 
 Para iniciar o MilesGuard:
 
-1. **Pré-requisitos** 
-   - [ ] Node.js 20+ instalado
+1. **Pré-requisitos** ✓
+   - [ ] Node.js 16+ instalado
    - [ ] npm disponível
    - [ ] Git configurado (opcional)
 
-2. **Instalação** 
+2. **Instalação** ✓
    ```bash
    git clone <repository>
    cd MilesGuard
-   npm run setup
+   node scripts/setup.js
    ```
 
-3. **Configuração do Ambiente** 
-   - [ ] Criar arquivo `.env` com base no `.env.example`
-   - [ ] Configurar `TELEGRAM_BOT_TOKEN`
-   - [ ] Configurar `TELEGRAM_CHAT_ID`
+3. **Configuração** ✓
+   - [ ] Editar arquivo `.env` criado
+   - [ ] Configurar bot do Telegram
+   - [ ] Definir grupos e palavras-chave
 
-4. **Configuração da Aplicação**
-   - [ ] Copiar `config.example.json` para `config.json`: `cp config.example.json config.json`
-   - [ ] Editar `config.json` com suas configurações
-   - [ ] Definir nome da comunidade
-   - [ ] Especificar subgrupos a serem monitorados
-   - [ ] Definir palavras-chave para filtragem
-
-5. **Validação** 
+4. **Validação** ✓
    ```bash
-   npm run validate
+   node scripts/validate.js
    npm test
    ```
 
-6. **Primeira Execução**
-   - [ ] Executar `npm start`
-   - [ ] Escanear QR Code com WhatsApp
-   - [ ] Verificar se a conexão foi estabelecida
-   - [ ] Confirmar recebimento de notificações no Telegram
-
-7. **Execução em Produção** 
+5. **Execução** ✓
    ```bash
-   npm run prod       # Iniciar com PM2
-   npm run status     # Verificar status
+   npm start          # Desenvolvimento
+   npm run prod       # Produção
    ```
-
-## 🔍 Monitoramento e Saúde da Aplicação
-
-### Monitoramento de Saúde
-Para verificar o status da aplicação:
-
-```bash
-# Verificar saúde da aplicação
-npm run health
-
-# Monitorar recursos em tempo real
-npm run monit
-
-# Ver logs em tempo real
-npm run logs
-```
-
-### Informações de Saúde Disponíveis
-O sistema fornece informações detalhadas sobre:
-- Tempo de atividade (uptime)
-- Status da conexão WhatsApp
-- Número de grupos monitorados
-- Estatísticas de notificações enviadas
-- Uso de memória
-- Informações do processo
 
 ## 🔮 Futuro Deployment
 
