@@ -47,16 +47,25 @@ jobs:
       id: version
       run: |
         # Analisar commits desde a última tag para determinar tipo de bump
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+        echo "Fetching all tags..."
+        git fetch --tags
+        
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null) || true
         
         if [ -z "$LATEST_TAG" ]; then
           # No tags found, get all commits
           echo "No previous tags found, analyzing all commits"
-          COMMITS=$(git log --oneline --no-merges)
+          COMMITS=$(git log --oneline --no-merges --max-count=100 2>/dev/null || echo "No commits found")
         else
           echo "Latest tag: $LATEST_TAG"
-          # Obter mensagens de commit desde a última tag
-          COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --no-merges)
+          # Check if tag exists in the repository
+          if git rev-parse -q --verify "$LATEST_TAG" >/dev/null 2>&1; then
+            # Obter mensagens de commit desde a última tag
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --no-merges 2>/dev/null || echo "No commits found since tag")
+          else
+            echo "Tag $LATEST_TAG not found, analyzing all commits"
+            COMMITS=$(git log --oneline --no-merges --max-count=100 2>/dev/null || echo "No commits found")
+          fi
         fi
         
         echo "Commits to analyze:"
