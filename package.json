@@ -53,7 +53,7 @@
     "chalk": "^5.6.0",
     "dotenv": "^17.2.2",
     "inquirer": "^12.9.4",
-    "node-telegram-bot-api": "^0.66.0",
+    "telegraf": "^4.16.3",
     "qrcode-terminal": "^0.12.0",
     "winston": "^3.17.0",
     "zod": "^4.1.5"

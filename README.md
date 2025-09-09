@@ -94,6 +94,167 @@ Noite (22:00):
 ✅ < 1 min de notificação após mensagem original
 ✅ 100% de uptime com PM2
 
+## 🚀 Primeiros Passos - Como Usar o MilesGuard
+
+### 1. Pré-requisitos
+Antes de usar o MilesGuard, certifique-se de ter instalado:
+- Node.js (versão 20 ou superior)
+- npm (geralmente vem com o Node.js)
+- Git (opcional, mas recomendado)
+
+### 2. Instalação
+```bash
+# Clone o repositório (se ainda não o fez)
+git clone <repository-url>
+cd MilesGuard
+
+# Execute o script de setup automático
+npm run setup
+
+# Ou execute diretamente:
+node scripts/setup.js
+```
+
+Este script irá:
+- Verificar os pré-requisitos
+- Instalar todas as dependências necessárias
+- Criar os diretórios necessários (logs, data, temp)
+- Validar a instalação
+
+### 3. Configuração
+
+#### 3.1. Configuração de Ambiente (.env)
+Crie um arquivo `.env` com as seguintes variáveis:
+```env
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=seu_token_do_bot_do_telegram
+TELEGRAM_CHAT_ID=seu_id_de_chat_do_telegram
+
+# WhatsApp Configuration
+WHATSAPP_SESSION_NAME=milesguard
+
+# Logging Configuration
+LOG_LEVEL=info
+LOG_FILE=./logs/milesguard.log
+
+# Application Configuration
+NODE_ENV=development
+PORT=3000
+```
+
+Para obter o `TELEGRAM_BOT_TOKEN`:
+1. Inicie uma conversa com o @BotFather no Telegram
+2. Use o comando `/newbot` para criar um novo bot
+3. Siga as instruções e copie o token fornecido
+
+Para obter o `TELEGRAM_CHAT_ID`:
+1. Inicie uma conversa com o seu bot recém-criado
+2. Envie qualquer mensagem para o bot
+3. Acesse `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` no seu navegador
+4. Procure o campo `id` no JSON retornado
+
+#### 3.2. Configuração da Aplicação (config.json)
+Crie um arquivo `config.json` na raiz do projeto com a seguinte estrutura. Você pode usar o arquivo `config.example.json` como base:
+
+```bash
+cp config.example.json config.json
+```
+
+Em seguida, edite o arquivo `config.json` com suas configurações:
+
+```json
+{
+  "comunidade": "Nome da sua comunidade",
+  "subgrupos": [
+    "Nome do Subgrupo 1",
+    "Nome do Subgrupo 2"
+  ],
+  "palavras_chave": [
+    "palavra1",
+    "palavra2",
+    "palavra3"
+  ],
+  "case_sensitive": false,
+  "rate_limit": 60,
+  "notification_enabled": true,
+  "telegram_enabled": true,
+  "file_storage_enabled": true,
+  "log_retention_days": 30
+}
+```
+
+Exemplo prático:
+```json
+{
+  "comunidade": "M01 Comunidade Masters",
+  "subgrupos": [
+    "Passagens SUL",
+    "Compra de Pontos",
+    "Transferências"
+  ],
+  "palavras_chave": [
+    "100%",
+    "bônus",
+    "latam",
+    "smiles"
+  ],
+  "case_sensitive": false,
+  "rate_limit": 60,
+  "notification_enabled": true,
+  "telegram_enabled": true,
+  "file_storage_enabled": true,
+  "log_retention_days": 30
+}
+```
+
+##### Explicação dos campos:
+- **comunidade**: Nome da comunidade do WhatsApp que você deseja monitorar
+- **subgrupos**: Lista dos nomes dos subgrupos que deseja monitorar (pode ser parte do nome)
+- **palavras_chave**: Lista de palavras-chave que determinam se uma mensagem é relevante
+- **case_sensitive**: Se true, diferencia maiúsculas de minúsculas nas palavras-chave
+- **rate_limit**: Limite de mensagens por minuto (1-300)
+- **notification_enabled**: Se true, habilita notificações (Telegram e/ou arquivo)
+- **telegram_enabled**: Se true, envia notificações via Telegram
+- **file_storage_enabled**: Se true, salva mensagens em arquivos locais
+- **log_retention_days**: Número de dias para manter os logs (1-365)
+
+### 4. Execução
+
+#### Modo de Desenvolvimento
+```bash
+npm start
+```
+
+Ou:
+```bash
+node src/index.js
+```
+
+Na primeira execução, será necessário escanear o QR Code com o WhatsApp para autenticar a sessão.
+
+#### Modo de Produção (com PM2)
+```bash
+npm run prod
+```
+
+### 5. Comandos PM2 Úteis
+```bash
+# Ver status do serviço
+npm run status
+
+# Ver logs
+npm run logs
+
+# Reiniciar serviço
+npm run restart
+
+# Parar serviço
+npm run stop
+
+# Monitorar recursos
+npm run monit
+```
+
 ## 🔧 Setup e Desenvolvimento
 
 ### Setup Automático (Recomendado)
@@ -167,6 +328,53 @@ npm run validate
 Após executar os testes, você encontrará:
 - `test-results.json` - Relatório detalhado dos testes
 - `validation-report.json` - Relatório de validação da aplicação
+
+## 🛠️ Troubleshooting
+
+Se encontrar problemas:
+
+1. **Verifique se todos os pré-requisitos estão instalados**
+   ```bash
+   node --version  # Deve ser v20 ou superior
+   npm --version
+   ```
+
+2. **Certifique-se de que as credenciais do Telegram estão corretas**
+   - Verifique se o `TELEGRAM_BOT_TOKEN` está correto
+   - Confirme se o `TELEGRAM_CHAT_ID` está correto
+   - Teste se o bot está funcionando mandando uma mensagem para ele no Telegram
+
+3. **Verifique se o WhatsApp está conectado**
+   - Na primeira execução, escaneie o QR Code quando solicitado
+   - Se tiver problemas de conexão, apague a pasta `auth_info` e reinicie
+
+4. **Confira os logs em `logs/milesguard.log` para mensagens de erro**
+
+5. **Execute `npm run validate` para verificar a configuração**
+   ```bash
+   npm run validate
+   ```
+
+6. **Verifique permissões de diretório**
+   - Certifique-se de que o aplicativo tem permissão para escrever nos diretórios `logs/` e `data/`
+
+## 🧪 Testando a Aplicação
+
+Para garantir que tudo está funcionando corretamente:
+
+```bash
+# Executar todos os testes
+npm test
+
+# Executar apenas testes unitários
+npm run test:unit
+
+# Executar apenas testes de integração
+npm run test:integration
+
+# Executar testes em modo watch (durante desenvolvimento)
+npm run test:watch
+```
 
 #### Cobertura Atual
 - **143+ testes** implementados
@@ -306,13 +514,41 @@ ecosystem.config.js
 }
 ```
 
-## 📈 Workflow de Desenvolvimento
+## 📈 Como o MilesGuard Funciona
 
-1. **Integração WhatsApp**: Implementar conexão com Baileys com autenticação QR
-2. **Filtragem de Mensagens**: Criar sistema de matching por palavras-chave
-3. **Sistema de Notificações**: Configurar bot do Telegram e armazenamento local
-4. **Gerenciamento de Processos**: Configurar PM2 para deploy em produção
-5. **Gerenciamento de Configuração**: Construir wizard interativo com Inquirer
+1. **Conexão com WhatsApp**: O sistema se conecta ao WhatsApp através de QR Code (apenas na primeira vez)
+
+2. **Monitoramento de Grupos**: Monitora os subgrupos especificados na configuração
+
+3. **Filtragem de Mensagens**: Filtra mensagens com base nas palavras-chave configuradas
+
+4. **Notificações**: 
+   - Envia notificações em tempo real via Telegram
+   - Salva as mensagens relevantes em arquivos organizados por data
+
+5. **Armazenamento Local**: 
+   - As mensagens são salvas em: `logs/YYYY-MM-DD/nome-do-subgrupo.json`
+   - Um resumo diário é gerado em: `logs/YYYY-MM-DD/resumo-diario.txt`
+
+## 📁 Estrutura de Arquivos Gerados
+
+```
+logs/
+├── 2024-04-20/
+│   ├── passagens-sul.json
+│   ├── compra-pontos.json
+│   └── resumo-diario.txt
+├── 2024-04-21/
+│   └── ...
+```
+
+Cada arquivo JSON contém as mensagens relevantes encontradas naquele subgrupo naquela data, com informações como:
+- ID da mensagem
+- Nome do grupo
+- Remetente
+- Texto da mensagem
+- Palavras-chave correspondentes
+- Timestamp
 
 ## 🎯 Funcionalidades Principais
 
@@ -343,38 +579,76 @@ ecosystem.config.js
 - **100% uptime** com PM2
 - **Zero manual intervention** em produção
 
-## 📋 Checklist de Setup
+## 📋 Checklist Completo de Setup
 
 Para iniciar o MilesGuard:
 
-1. **Pré-requisitos** ✓
-   - [ ] Node.js 16+ instalado
+1. **Pré-requisitos** 
+   - [ ] Node.js 20+ instalado
    - [ ] npm disponível
    - [ ] Git configurado (opcional)
 
-2. **Instalação** ✓
+2. **Instalação** 
    ```bash
    git clone <repository>
    cd MilesGuard
-   node scripts/setup.js
+   npm run setup
    ```
 
-3. **Configuração** ✓
-   - [ ] Editar arquivo `.env` criado
-   - [ ] Configurar bot do Telegram
-   - [ ] Definir grupos e palavras-chave
+3. **Configuração do Ambiente** 
+   - [ ] Criar arquivo `.env` com base no `.env.example`
+   - [ ] Configurar `TELEGRAM_BOT_TOKEN`
+   - [ ] Configurar `TELEGRAM_CHAT_ID`
 
-4. **Validação** ✓
+4. **Configuração da Aplicação**
+   - [ ] Copiar `config.example.json` para `config.json`: `cp config.example.json config.json`
+   - [ ] Editar `config.json` com suas configurações
+   - [ ] Definir nome da comunidade
+   - [ ] Especificar subgrupos a serem monitorados
+   - [ ] Definir palavras-chave para filtragem
+
+5. **Validação** 
    ```bash
-   node scripts/validate.js
+   npm run validate
    npm test
    ```
 
-5. **Execução** ✓
+6. **Primeira Execução**
+   - [ ] Executar `npm start`
+   - [ ] Escanear QR Code com WhatsApp
+   - [ ] Verificar se a conexão foi estabelecida
+   - [ ] Confirmar recebimento de notificações no Telegram
+
+7. **Execução em Produção** 
    ```bash
-   npm start          # Desenvolvimento
-   npm run prod       # Produção
+   npm run prod       # Iniciar com PM2
+   npm run status     # Verificar status
    ```
+
+## 🔍 Monitoramento e Saúde da Aplicação
+
+### Monitoramento de Saúde
+Para verificar o status da aplicação:
+
+```bash
+# Verificar saúde da aplicação
+npm run health
+
+# Monitorar recursos em tempo real
+npm run monit
+
+# Ver logs em tempo real
+npm run logs
+```
+
+### Informações de Saúde Disponíveis
+O sistema fornece informações detalhadas sobre:
+- Tempo de atividade (uptime)
+- Status da conexão WhatsApp
+- Número de grupos monitorados
+- Estatísticas de notificações enviadas
+- Uso de memória
+- Informações do processo
 
 ## 🔮 Futuro Deployment
 

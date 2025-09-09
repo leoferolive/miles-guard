@@ -1,4 +1,4 @@
-const TelegramBot = require('node-telegram-bot-api');
+const { Telegraf } = require('telegraf');
 const { notificationLogger } = require('../utils/logger');
 const { sleep } = require('../utils/helpers');
 const env = require('../config/environment');
@@ -29,10 +29,10 @@ class TelegramService {
     }
 
     try {
-      this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, { polling: false });
+      this.bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
       
-      // Test connection
-      const me = await this.bot.getMe();
+      // Test connection by getting bot information
+      const me = await this.bot.telegram.getMe();
       notificationLogger.info('Telegram service initialized successfully', { 
         botName: me.username,
         chatId: this.chatId
@@ -194,7 +194,7 @@ class TelegramService {
         ...options
       };
 
-      await this.bot.sendMessage(this.chatId, text, sendOptions);
+      await this.bot.telegram.sendMessage(this.chatId, text, sendOptions);
       
       return { success: true };
       
@@ -275,8 +275,10 @@ class TelegramService {
     // Clear remaining queue
     await this.clearQueue();
     
+    // Telegraf doesn't have stopPolling, but we can stop the bot
     if (this.bot) {
-      await this.bot.stopPolling();
+      // In Telegraf, we don't need to explicitly stop polling for bots that aren't launched
+      // The bot is only used for sending messages, not receiving them
     }
   }
 }

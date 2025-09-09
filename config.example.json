@@ -1,0 +1,20 @@
+{
+  "comunidade": "M01 Comunidade Masters",
+  "subgrupos": [
+    "Passagens SUL",
+    "Compra de Pontos",
+    "Transferências"
+  ],
+  "palavras_chave": [
+    "100%",
+    "bônus",
+    "latam",
+    "smiles"
+  ],
+  "case_sensitive": false,
+  "rate_limit": 60,
+  "notification_enabled": true,
+  "telegram_enabled": true,
+  "file_storage_enabled": true,
+  "log_retention_days": 30
+}

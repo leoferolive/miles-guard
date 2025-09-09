@@ -1,13 +1,13 @@
 {
-  "timestamp": "2025-09-09T03:39:25.287Z",
-  "duration": 2588,
+  "timestamp": "2025-09-09T03:54:37.479Z",
+  "duration": 7288,
   "results": {
     "unit": {
       "models": {
         "passing": 36,
         "failing": 0,
         "pending": 0,
-        "duration": 31
+        "duration": 35
       },
       "utils": {
         "passing": 0,
