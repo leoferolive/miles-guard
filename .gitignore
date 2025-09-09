@@ -68,3 +68,5 @@ docs/_book/
 # Diretórios de credenciais (mesmo que vazios)
 auth_info/
 auth_info_poc/
+.gemini/
+gha-creds-*.json
