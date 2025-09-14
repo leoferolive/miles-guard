@@ -1,6 +1,6 @@
 const { makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
-const chalk = require('chalk');
+const chalk = require('chalk').default;
 const EventEmitter = require('events');
 
 const { whatsappLogger } = require('../../utils/logger');

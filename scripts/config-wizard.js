@@ -9,7 +9,7 @@ const { Telegraf } = require('telegraf');
 const fs = require('fs').promises;
 const path = require('path');
 const inquirer = require('inquirer');
-const chalk = require('chalk');
+const chalk = require('chalk').default;
 
 // Colors for console output
 const colors = {
