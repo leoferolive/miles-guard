@@ -18,6 +18,8 @@ const envSchema = z
     PUBLIC_URL: z.string().url().default('http://localhost:3000'),
     /** Origem do SPA para CORS (Fase 4); por padrão o próprio Painel. */
     CORS_ORIGIN: z.string().url().default('http://localhost:5173'),
+    /** Override do diretório do build da SPA (apps/web/dist). Vazio = auto-resolve. */
+    WEB_DIST_PATH: z.string().optional(),
     JWT_SECRET: z.string().default(INSECURE_JWT_DEFAULT),
     /** Validade do JWT de sessão (ADR-0005: 7 dias). */
     JWT_EXPIRES_IN: z.string().default('7d'),

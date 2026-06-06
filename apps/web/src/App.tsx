@@ -1,9 +1,62 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
+import { ProtectedRoute } from '@/components/protected-route';
+import { RealtimeProvider } from '@/components/realtime-provider';
+import { AuthProvider } from '@/contexts/auth-context';
+import { AuthCallbackPage } from '@/pages/auth-callback-page';
+import { ConexaoPage } from '@/pages/conexao-page';
+import { ContaPage } from '@/pages/conta-page';
+import { DeteccoesPage } from '@/pages/deteccoes-page';
+import { GruposPage } from '@/pages/grupos-page';
+import { LoginPage } from '@/pages/login-page';
+
 export function App() {
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: 24, maxWidth: 720 }}>
-      <h1>nossoRadar</h1>
-      <p>Painel de monitoramento de ofertas no WhatsApp.</p>
-      <p style={{ color: '#666' }}>Em construção — telas da Fase 5 (Conexão, Grupos, Detecções, Config).</p>
-    </main>
+    <AuthProvider>
+      <RealtimeProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+
+            <Route
+              path="/conexao"
+              element={
+                <ProtectedRoute>
+                  <ConexaoPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/grupos"
+              element={
+                <ProtectedRoute>
+                  <GruposPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/deteccoes"
+              element={
+                <ProtectedRoute>
+                  <DeteccoesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/conta"
+              element={
+                <ProtectedRoute>
+                  <ContaPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route path="/" element={<Navigate to="/conexao" replace />} />
+            <Route path="*" element={<Navigate to="/conexao" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </RealtimeProvider>
+    </AuthProvider>
   );
 }
