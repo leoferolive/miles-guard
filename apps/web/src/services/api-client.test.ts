@@ -60,6 +60,22 @@ describe('ApiClient', () => {
     expect(onUnauthorized).toHaveBeenCalled();
   });
 
+  it('em 401 com skipUnauthorizedHandler NÃO chama onUnauthorized (login)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Credenciais inválidas.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const client = build(fetchMock as unknown as typeof fetch);
+
+    // O 401 vira um erro com a mensagem do servidor (não o redirect global).
+    await expect(
+      client.post('/api/auth/login', { email: 'x', password: 'y' }, { skipUnauthorizedHandler: true }),
+    ).rejects.toThrow('Credenciais inválidas.');
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
   it('retorna undefined em 204 (No Content)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     const client = build(fetchMock as unknown as typeof fetch);

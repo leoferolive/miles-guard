@@ -1,5 +1,5 @@
 /**
- * Cliente HTTP do Painel. Single-user, JWT único (sem refresh token — ADR-0005):
+ * Cliente HTTP do Painel. Single-user, JWT único (sem refresh token — ADR-0007):
  * anexa `Authorization: Bearer <token>` e, em 401, limpa a sessão e redireciona ao login.
  *
  * Espelha o api-client do nossagrana, simplificado para o fluxo de token único do nossoRadar.

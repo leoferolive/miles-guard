@@ -10,9 +10,7 @@ const INSECURE_JWT_DEFAULT = 'dev-inseguro-troque-por-32+-caracteres-aleatorios'
  * sem precisar gerar um hash. Em produção é proibido (fail-fast no superRefine).
  * Gerado com: bcryptjs.hashSync('dev', 10).
  */
-const DEV_PASSWORD_HASH = '$2a$10$so4f68IybCBgMr4kI4R92OHh1qzPqMqAdtrNf4MJUWNOUOidQ2n62';
-
-const isProd = process.env.NODE_ENV === 'production';
+export const DEV_PASSWORD_HASH = '$2a$10$so4f68IybCBgMr4kI4R92OHh1qzPqMqAdtrNf4MJUWNOUOidQ2n62';
 
 /**
  * Schema do ambiente do Painel. Fora de produção há defaults seguros para dev/test;
@@ -71,12 +69,25 @@ const envSchema = z
     }
   });
 
-const parsed = envSchema.safeParse(process.env);
+export type Env = z.infer<typeof envSchema>;
+
+/**
+ * Validação pura do ambiente (ADR-0007), isolada para ser testável sem matar o
+ * processo. Retorna `{ success, data }` ou `{ success: false, error }`.
+ */
+export function parseEnv(source: NodeJS.ProcessEnv = process.env): z.SafeParseReturnType<
+  unknown,
+  Env
+> {
+  return envSchema.safeParse(source);
+}
+
+const parsed = parseEnv(process.env);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console
   console.error('Variáveis de ambiente inválidas:', parsed.error.flatten().fieldErrors);
-  if (isProd) process.exit(1);
+  if (process.env.NODE_ENV === 'production') process.exit(1);
   throw new Error('Variáveis de ambiente inválidas');
 }
 
