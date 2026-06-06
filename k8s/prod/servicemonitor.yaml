@@ -1,0 +1,29 @@
+# ServiceMonitor (kube-prometheus-stack). O label `release: kps` é exigido pelo
+# serviceMonitorSelector do kps. Scrape de /metrics nos Services web e worker.
+#
+# Os dois Services têm porta nomeada `http`; um único ServiceMonitor com
+# matchExpressions cobre ambos (app in [nossoradar-web, nossoradar-worker]).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nossoradar
+  namespace: nossoradar
+  labels:
+    app: nossoradar
+    release: kps
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - nossoradar-web
+          - nossoradar-worker
+  namespaceSelector:
+    matchNames:
+      - nossoradar
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

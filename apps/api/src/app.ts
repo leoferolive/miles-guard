@@ -12,6 +12,7 @@ import { ZodError } from 'zod';
 
 import { env } from './env.js';
 import { authPlugin } from './plugins/auth.plugin.js';
+import { metricsPlugin } from './plugins/metrics.plugin.js';
 import { oauthPlugin } from './plugins/oauth.plugin.js';
 import { staticPlugin } from './plugins/static.plugin.js';
 import { websocketPlugin } from './plugins/websocket.plugin.js';
@@ -109,13 +110,11 @@ export function buildApp(): FastifyInstance {
   void app.register(authPlugin);
   void app.register(oauthPlugin);
   void app.register(websocketPlugin);
+  // Registro Prometheus real (default metrics + contador de requests) em /metrics.
+  void app.register(metricsPlugin);
 
-  // Healthcheck (probes k8s) e métricas stub (Fase 6).
+  // Healthcheck (probes k8s).
   app.get('/healthz', async () => ({ status: 'ok' }));
-  app.get('/metrics', async (_req, reply) => {
-    reply.type('text/plain');
-    return '# nossoRadar metrics (stub)\n';
-  });
 
   // API REST + WS sob /api e /ws.
   void app.register(authRoutes, { prefix: '/api' });

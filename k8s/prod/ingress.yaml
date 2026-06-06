@@ -1,0 +1,23 @@
+# Ingress Traefik → Painel (web). TLS terminado na borda pelo Cloudflare Tunnel,
+# então o entrypoint é HTTP (web), como no chat-api.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nossoradar
+  namespace: nossoradar
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: nossoradar.leoferolive.com.br
+      http:
+        paths:
+          # O Painel serve SPA + API + WS no mesmo host/porta — uma única rota.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nossoradar-web
+                port:
+                  number: 80

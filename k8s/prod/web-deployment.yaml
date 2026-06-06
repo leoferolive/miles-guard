@@ -1,0 +1,88 @@
+# Painel (web): Fastify servindo API + WebSocket + OAuth + SPA React estática
+# (deployment combinado — ver plano/CONTEXT). Antes do app subir, um
+# initContainer roda as migrations Drizzle (mesma imagem).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nossoradar-web
+  namespace: nossoradar
+  labels:
+    app: nossoradar-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nossoradar-web
+  template:
+    metadata:
+      labels:
+        app: nossoradar-web
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      initContainers:
+        # Migrations idempotentes: rodam a cada deploy antes do app aceitar tráfego.
+        # Usa a MESMA imagem do web (carrega packages/db/dist/migrate.js + migrations).
+        - name: db-migrate
+          image: ghcr.io/leoferolive/nossoradar-web:latest
+          imagePullPolicy: Always
+          command: ['node', 'packages/db/dist/migrate.js']
+          envFrom:
+            - configMapRef:
+                name: nossoradar-config
+            - secretRef:
+                name: nossoradar-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      containers:
+        - name: web
+          image: ghcr.io/leoferolive/nossoradar-web:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: nossoradar-config
+            - secretRef:
+                name: nossoradar-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nossoradar-web
+  namespace: nossoradar
+  labels:
+    app: nossoradar-web
+spec:
+  selector:
+    app: nossoradar-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  type: ClusterIP

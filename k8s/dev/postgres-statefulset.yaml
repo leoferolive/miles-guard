@@ -1,0 +1,80 @@
+# Postgres in-cluster (ADR-0006): estado durável + barramento LISTEN/NOTIFY
+# (ADR-0003). StatefulSet + volumeClaimTemplates (local-path), espelha o
+# nossagrana/k8s/postgres/statefulset.yaml.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nossoradar-postgres
+  namespace: nossoradar-dev
+spec:
+  serviceName: nossoradar-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nossoradar-postgres
+  template:
+    metadata:
+      labels:
+        app: nossoradar-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: nossoradar-postgres-secrets
+          # PGDATA em subdir do volume: evita que o initdb falhe por causa do
+          # diretório lost+found na raiz de alguns provisionadores.
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nossoradar-postgres
+  namespace: nossoradar-dev
+spec:
+  selector:
+    app: nossoradar-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None

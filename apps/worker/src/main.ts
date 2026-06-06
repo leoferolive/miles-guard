@@ -1,11 +1,17 @@
 import { closeDb, listen } from '@nossoradar/db';
 import { NOTIFY_CHANNELS } from '@nossoradar/shared';
 
+import { env } from './env.js';
+import { startHealthServer } from './health-server.js';
 import { WhatsAppWorker } from './whatsapp.js';
 
 /** Worker WhatsApp (singleton — ADR-0004). */
 async function main(): Promise<void> {
   console.log('[worker] nossoRadar worker iniciando...');
+
+  // Sobe primeiro o health/metrics: as probes do k8s precisam de /healthz
+  // mesmo enquanto o pareamento WhatsApp ainda não concluiu.
+  const healthServer = startHealthServer(env.WORKER_HEALTH_PORT);
 
   const worker = new WhatsAppWorker();
   await worker.reloadConfig();
@@ -28,6 +34,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     console.log('[worker] encerrando...');
     worker.stop();
+    healthServer.close();
     await closeDb();
     process.exit(0);
   };

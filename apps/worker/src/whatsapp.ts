@@ -29,6 +29,7 @@ import {
 } from '@whiskeysockets/baileys';
 
 import { env } from './env.js';
+import { detectionsCounter, setWhatsappConnectionState } from './metrics.js';
 import { formatDetectionAlert, TelegramNotifier } from './telegram.js';
 
 interface MonitoredGroup {
@@ -76,6 +77,7 @@ export class WhatsAppWorker {
     const { state, saveCreds } = await useMultiFileAuthState(env.WA_SESSION_PATH);
 
     await setConnecting();
+    setWhatsappConnectionState('connecting');
     await notify(NOTIFY_CHANNELS.connectionState);
 
     const { version } = await fetchLatestBaileysVersion();
@@ -158,6 +160,7 @@ export class WhatsAppWorker {
 
       if (qr) {
         await setQrCode(qr);
+        setWhatsappConnectionState('qr');
         await notify(NOTIFY_CHANNELS.connectionState);
         console.log('[worker] QR atualizado — pareie pelo painel.');
       }
@@ -165,6 +168,7 @@ export class WhatsAppWorker {
       if (connection === 'open') {
         this.reconnectAttempts = 0;
         await setConnected();
+        setWhatsappConnectionState('connected');
         await notify(NOTIFY_CHANNELS.connectionState);
         console.log('[worker] conectado ao WhatsApp.');
         setTimeout(() => {
@@ -175,6 +179,7 @@ export class WhatsAppWorker {
 
       if (connection === 'close') {
         await setDisconnected();
+        setWhatsappConnectionState('disconnected');
         await notify(NOTIFY_CHANNELS.connectionState);
 
         const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
@@ -254,6 +259,7 @@ export class WhatsAppWorker {
       messageId: message.key?.id ?? null,
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
+    detectionsCounter.inc({ group_jid: jid });
 
     // `notified_telegram` só vira true quando o envio confirma (onSent). Se o Telegram
     // estiver desabilitado, fica false (= não confirmado), por design.

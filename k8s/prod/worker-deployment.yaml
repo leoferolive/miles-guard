@@ -1,0 +1,80 @@
+# Worker WhatsApp — singleton (ADR-0004): replicas:1 + strategy Recreate para
+# NUNCA ter dois sockets Baileys na mesma conta. NÃO adicionar HPA/KEDA.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nossoradar-worker
+  namespace: nossoradar
+  labels:
+    app: nossoradar-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nossoradar-worker
+  template:
+    metadata:
+      labels:
+        app: nossoradar-worker
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      volumes:
+        - name: session
+          persistentVolumeClaim:
+            claimName: nossoradar-worker-session
+      containers:
+        - name: worker
+          image: ghcr.io/leoferolive/nossoradar-worker:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: nossoradar-config
+            - secretRef:
+                name: nossoradar-secrets
+          volumeMounts:
+            - name: session
+              mountPath: /session
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 750m
+              memory: 512Mi
+          # Probes no servidor de health/metrics (não no socket WhatsApp): o pod
+          # fica Ready mesmo aguardando pareamento, mas reinicia se o processo travar.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+# Service ClusterIP só para o scrape do ServiceMonitor em /metrics (port http).
+apiVersion: v1
+kind: Service
+metadata:
+  name: nossoradar-worker
+  namespace: nossoradar
+  labels:
+    app: nossoradar-worker
+spec:
+  selector:
+    app: nossoradar-worker
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001
+  type: ClusterIP
