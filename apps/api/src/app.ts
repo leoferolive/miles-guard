@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { env } from './env.js';
 import { authPlugin } from './plugins/auth.plugin.js';
 import { oauthPlugin } from './plugins/oauth.plugin.js';
+import { staticPlugin } from './plugins/static.plugin.js';
 import { websocketPlugin } from './plugins/websocket.plugin.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { connectionRoutes } from './routes/connection.routes.js';
@@ -82,6 +83,10 @@ export function buildApp(): FastifyInstance {
   void app.register(whatsappRoutes, { prefix: '/api' });
   void app.register(detectionsRoutes, { prefix: '/api' });
   void app.register(wsRoutes);
+
+  // SPA estática (Fase 4): serve apps/web/dist com history fallback.
+  // No-op se o dist não existir (dev/test) — não quebra a API.
+  void app.register(staticPlugin);
 
   return app;
 }
