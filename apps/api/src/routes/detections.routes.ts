@@ -1,5 +1,5 @@
 import { getStats, listDetections, type DetectionRow } from '@nossoradar/db';
-import { listDetectionsQuery } from '@nossoradar/shared';
+import { listDetectionsQuery, statsSchema } from '@nossoradar/shared';
 import type { FastifyPluginAsync } from 'fastify';
 
 function serializeDetection(d: DetectionRow): Record<string, unknown> {
@@ -39,6 +39,6 @@ export const detectionsRoutes: FastifyPluginAsync = async (fastify) => {
 
   /** GET /api/stats → totais, contagem por grupo e top Palavras-chave. */
   fastify.get('/stats', async () => {
-    return getStats();
+    return statsSchema.parse(await getStats());
   });
 };

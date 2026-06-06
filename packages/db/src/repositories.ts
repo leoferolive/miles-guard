@@ -190,9 +190,46 @@ export async function listMonitoredGroups(): Promise<MonitoredGroupRow[]> {
   return [...byId.values()];
 }
 
-async function getMonitoredGroupById(id: string): Promise<MonitoredGroupRow | null> {
-  const groups = await listMonitoredGroups();
-  return groups.find((g) => g.id === id) ?? null;
+/** Busca UM Grupo Monitorado por id (com suas keywords), consulta escopada. */
+export async function getMonitoredGroupById(id: string): Promise<MonitoredGroupRow | null> {
+  const rows = await db
+    .select({
+      id: monitoredGroups.id,
+      jid: monitoredGroups.jid,
+      name: monitoredGroups.name,
+      enabled: monitoredGroups.enabled,
+      createdAt: monitoredGroups.createdAt,
+      keywordId: keywords.id,
+      keywordTerm: keywords.term,
+      keywordCreatedAt: keywords.createdAt,
+    })
+    .from(monitoredGroups)
+    .leftJoin(keywords, eq(keywords.monitoredGroupId, monitoredGroups.id))
+    .where(eq(monitoredGroups.id, id))
+    .orderBy(asc(keywords.createdAt));
+
+  const first = rows[0];
+  if (!first) return null;
+
+  const group: MonitoredGroupRow = {
+    id: first.id,
+    jid: first.jid,
+    name: first.name,
+    enabled: first.enabled,
+    createdAt: first.createdAt,
+    keywords: [],
+  };
+  for (const row of rows) {
+    if (row.keywordId && row.keywordTerm && row.keywordCreatedAt) {
+      group.keywords.push({
+        id: row.keywordId,
+        monitoredGroupId: row.id,
+        term: row.keywordTerm,
+        createdAt: row.keywordCreatedAt,
+      });
+    }
+  }
+  return group;
 }
 
 export interface CreateMonitoredGroupArgs {

@@ -64,6 +64,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(401).send({ message: 'Não foi possível obter o perfil do Google.' });
     }
 
+    // Só aceitamos e-mails verificados pelo Google (antes mesmo da allowlist).
+    if (userinfo.email_verified !== true) {
+      request.log.warn({ email: userinfo.email }, 'login negado: e-mail não verificado');
+      return reply.code(403).send({ message: 'E-mail não verificado pelo Google.' });
+    }
+
     // CRÍTICO (ADR-0005): allowlist. E-mail fora da lista NÃO cria usuário e recebe 403.
     if (!isEmailAllowed(userinfo.email, env.ALLOWED_EMAILS)) {
       request.log.warn({ email: userinfo.email }, 'login negado: e-mail fora da allowlist');

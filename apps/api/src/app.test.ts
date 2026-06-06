@@ -94,9 +94,34 @@ vi.mock('@nossoradar/db', () => ({
     }
     return false;
   }),
-  listDetections: vi.fn(async () => ({ items: [], total: 0, limit: 50, offset: 0 })),
-  getStats: vi.fn(async () => ({ totalDetections: 0, perGroup: [], topKeywords: [] })),
+  listDetections: vi.fn(async (filters: Record<string, unknown> = {}) => ({
+    items: [
+      {
+        id: '00000000-0000-0000-0000-0000000000d1',
+        groupJid: '111@g.us',
+        groupName: 'Passagens SUL',
+        sender: 'fulano',
+        messageText: '100% bonus latam',
+        matchedKeywords: ['latam'],
+        messageId: 'msg-1',
+        detectedAt: now,
+        notifiedTelegram: true,
+      },
+    ],
+    total: 1,
+    limit: (filters.limit as number | undefined) ?? 50,
+    offset: (filters.offset as number | undefined) ?? 0,
+  })),
+  getStats: vi.fn(async () => ({
+    totalDetections: 3,
+    perGroup: [{ groupJid: '111@g.us', groupName: 'Passagens SUL', count: 3 }],
+    topKeywords: [{ keyword: 'latam', count: 2 }],
+  })),
+  listen: vi.fn(async () => async () => undefined),
+  closeDb: vi.fn(async () => undefined),
 }));
+
+const dbMock = await import('@nossoradar/db');
 
 const { buildApp } = await import('./app.js');
 
@@ -260,5 +285,86 @@ describe('nossoRadar API', () => {
   it('GET /api/auth/google responde 503 quando OAuth desabilitado (sem credencial)', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/google' });
     expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/groups com body malformado retorna 400 (não 500)', async () => {
+    const auth = { authorization: `Bearer ${token(app)}` };
+
+    // falta `name` (obrigatório)
+    const missingName = await app.inject({
+      method: 'POST',
+      url: '/api/groups',
+      headers: auth,
+      payload: { jid: '111@g.us', keywords: ['x'] },
+    });
+    expect(missingName.statusCode).toBe(400);
+
+    // tipos errados
+    const wrongTypes = await app.inject({
+      method: 'POST',
+      url: '/api/groups',
+      headers: auth,
+      payload: { jid: 123, name: '', keywords: 'naolista' },
+    });
+    expect(wrongTypes.statusCode).toBe(400);
+  });
+
+  it('GET /api/detections com query inválida retorna 400', async () => {
+    const auth = { authorization: `Bearer ${token(app)}` };
+
+    const badLimit = await app.inject({
+      method: 'GET',
+      url: '/api/detections?limit=abc',
+      headers: auth,
+    });
+    expect(badLimit.statusCode).toBe(400);
+
+    const badSince = await app.inject({
+      method: 'GET',
+      url: '/api/detections?since=naodata',
+      headers: auth,
+    });
+    expect(badSince.statusCode).toBe(400);
+  });
+
+  it('GET /api/detections aplica filtros/paginação e molda a resposta', async () => {
+    const auth = { authorization: `Bearer ${token(app)}` };
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/detections?limit=10&offset=5&groupJid=111@g.us&keyword=latam&since=2026-06-01T00:00:00.000Z',
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: unknown[]; total: number; limit: number; offset: number };
+    expect(body.total).toBe(1);
+    expect(body.limit).toBe(10);
+    expect(body.offset).toBe(5);
+    expect(body.items).toHaveLength(1);
+
+    // o repo recebeu os filtros já parseados (limit/offset numéricos, since como Date)
+    expect(dbMock.listDetections).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 10,
+        offset: 5,
+        groupJid: '111@g.us',
+        keyword: 'latam',
+        since: expect.any(Date),
+      }),
+    );
+  });
+
+  it('GET /api/stats retorna totais, contagem por grupo e top keywords', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/stats',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      totalDetections: 3,
+      perGroup: [{ groupJid: '111@g.us', count: 3 }],
+      topKeywords: [{ keyword: 'latam', count: 2 }],
+    });
   });
 });

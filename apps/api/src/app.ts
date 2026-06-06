@@ -1,5 +1,10 @@
-import Fastify, { type FastifyInstance } from 'fastify';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import {
+  hasZodFastifySchemaValidationErrors,
+  serializerCompiler,
+  validatorCompiler,
+} from 'fastify-type-provider-zod';
+import { ZodError } from 'zod';
 
 import { env } from './env.js';
 import { authPlugin } from './plugins/auth.plugin.js';
@@ -24,6 +29,35 @@ export function buildApp(): FastifyInstance {
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Erros de validação (zod, via schema: ou via .parse() manual) viram 400; o resto 500.
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    if (error instanceof ZodError || hasZodFastifySchemaValidationErrors(error)) {
+      return reply.code(400).send({ message: 'Requisição inválida.' });
+    }
+    // Respeita statusCode explícito (ex.: 401 do JWT) sem virar 500.
+    const status = error.statusCode ?? 500;
+    if (status >= 500) {
+      request.log.error({ err: error }, 'erro inesperado');
+      return reply.code(500).send({ message: 'Erro interno.' });
+    }
+    return reply.code(status).send({ message: error.message });
+  });
+
+  // Security headers (sem CSP — API JSON; o SPA virá na Fase 4).
+  void app.register(import('@fastify/helmet'), {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  });
+
+  // Rate limiting global (desabilitado em testes). Cobre callback de auth e upgrade do WS.
+  if (env.NODE_ENV !== 'test') {
+    void app.register(import('@fastify/rate-limit'), {
+      max: 100,
+      timeWindow: '1 minute',
+      allowList: (req) => req.url === '/healthz',
+    });
+  }
 
   void app.register(import('@fastify/cors'), {
     origin: env.CORS_ORIGIN,
