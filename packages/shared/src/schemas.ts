@@ -67,11 +67,46 @@ export type AuthUser = z.infer<typeof authUserSchema>;
 // --- Contratos de entrada da API ---
 export const createMonitoredGroupInput = z.object({
   jid: z.string().min(1),
+  name: z.string().min(1),
   keywords: z.array(z.string().min(1)).default([]),
 });
 export type CreateMonitoredGroupInput = z.infer<typeof createMonitoredGroupInput>;
+
+export const updateMonitoredGroupInput = z.object({
+  enabled: z.boolean(),
+});
+export type UpdateMonitoredGroupInput = z.infer<typeof updateMonitoredGroupInput>;
 
 export const addKeywordInput = z.object({
   term: z.string().min(1),
 });
 export type AddKeywordInput = z.infer<typeof addKeywordInput>;
+
+// --- Query de listagem de Detecções ---
+export const listDetectionsQuery = z.object({
+  limit: z.coerce.number().int().positive().max(200).optional(),
+  offset: z.coerce.number().int().nonnegative().optional(),
+  groupJid: z.string().min(1).optional(),
+  keyword: z.string().min(1).optional(),
+  since: z.string().datetime().optional(),
+});
+export type ListDetectionsQuery = z.infer<typeof listDetectionsQuery>;
+
+// --- Estatísticas ---
+export const statsSchema = z.object({
+  totalDetections: z.number().int().nonnegative(),
+  perGroup: z.array(
+    z.object({
+      groupJid: z.string(),
+      groupName: z.string().nullable(),
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+  topKeywords: z.array(
+    z.object({
+      keyword: z.string(),
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type Stats = z.infer<typeof statsSchema>;
