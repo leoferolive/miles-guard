@@ -1,75 +1,25 @@
 {
-  "name": "milesguard",
-  "version": "1.3.1",
-  "description": "MilesGuard - Monitor automático de ofertas em grupos do WhatsApp com notificações via Telegram, usando dependências modernas e atualizadas",
-  "main": "src/index.js",
-  "engines": {
-    "node": ">=20.0.0"
-  },
+  "name": "nossoradar",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "NODE_ENV=development node --watch src/index.js",
-    "prod": "pm2 start ecosystem.config.js --env production",
-    "stop": "pm2 stop milesguard",
-    "restart": "pm2 restart milesguard",
-    "logs": "pm2 logs milesguard",
-    "monit": "pm2 monit",
-    "status": "pm2 status milesguard",
-    "save": "pm2 save",
-    "resurrect": "pm2 resurrect",
-    "flush-logs": "pm2 flush milesguard",
-    "health": "node scripts/health-check.js",
-    "setup": "node scripts/setup.js",
-    "config": "node scripts/config-wizard.js",
-    "validate": "node scripts/validate.js",
-    "test": "node scripts/test.js",
-    "test:unit": "cross-env NODE_ENV=test mocha tests/unit/**/*.test.js --timeout 5000 --recursive",
-    "test:integration": "cross-env NODE_ENV=test mocha tests/integration/**/*.test.js --timeout 15000 --recursive",
-    "test:coverage": "cross-env NODE_ENV=test nyc mocha tests/**/*.test.js --timeout 10000 --recursive",
-    "test:watch": "cross-env NODE_ENV=test mocha tests/**/*.test.js --timeout 10000 --recursive --watch",
-    "test:without-telegram": "node scripts/test-without-telegram.js",
-    "lint": "eslint src/**/*.js",
-    "lint:fix": "eslint src/**/*.js --fix",
-    "build": "node --check src/index.js",
-    "poc": "node poc.js",
-    "version:patch": "npm version patch",
-    "version:minor": "npm version minor",
-    "version:major": "npm version major",
-    "version:check": "echo \"Current version: $(node -p 'require(\"./package.json\").version')\"",
-    "changelog": "git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/leoferolive/miles-guard.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/leoferolive/miles-guard/issues"
-  },
-  "homepage": "https://github.com/leoferolive/miles-guard#readme",
-  "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.19",
-    "chalk": "^5.6.0",
-    "dotenv": "^17.2.2",
-    "inquirer": "^12.9.4",
-    "telegraf": "^4.16.3",
-    "qrcode-terminal": "^0.12.0",
-    "winston": "^3.17.0",
-    "zod": "^4.1.5"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "audit-ci": "^7.1.0",
-    "chai": "^6.0.1",
-    "cross-env": "^7.0.3",
-    "eslint": "^8.57.1",
-    "mocha": "^11.7.2",
-    "nyc": "^17.1.0",
-    "pm2": "^6.0.10",
-    "sinon": "^21.0.0",
-    "sinon-chai": "^4.0.1",
-    "supertest": "^7.0.0"
-  }
+    "@types/node": "^22.13.10",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0"
 }

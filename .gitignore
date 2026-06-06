@@ -22,6 +22,12 @@ build/
 out/
 .release/
 
+# Monorepo / turbo
+.turbo/
+
+# Sessão do WhatsApp (Baileys auth state) em dev
+.session/
+
 # Arquivos temporários e cache
 .tmp/
 temp/
