@@ -2,7 +2,7 @@ name: CI
 
 # Gates obrigatorios em PR e push para branches de feature.
 # Build/test nao precisam de arm64 -> runner padrao (ubuntu-latest), com cache de pnpm.
-# (Deploy/build de imagem arm64 vivem em deploy-environment.yml, no runner self-hosted ARM64.)
+# (Deploy/build de imagem arm64 vivem em deploy-environment.yml, em runners hospedados ubuntu-24.04-arm.)
 on:
   pull_request:
   push:
