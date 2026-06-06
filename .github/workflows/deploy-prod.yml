@@ -1,0 +1,90 @@
+name: Deploy Prod (nossoradar)
+
+# Deploy manual em producao a partir de uma tag semver estavel (vX.Y.Z).
+# Espelha nossagrana/chat-api: valida a tag, exige aprovacao via Environment
+# 'production' (protection rule) e chama o reusable deploy-environment.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag semantica estavel para deploy em producao, ex: v1.2.3'
+        required: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  validate-tag:
+    runs-on: [self-hosted, Linux, ARM64]
+    steps:
+      - name: Validar formato da tag estavel
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag invalida: '$TAG'. Producao aceita apenas tag estavel vX.Y.Z."
+            exit 1
+          fi
+
+      - name: Checkout para validacao da tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Garantir que a tag existe no repositorio
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git rev-parse "${TAG}^{commit}" >/dev/null
+
+  approve:
+    needs: validate-tag
+    runs-on: [self-hosted, Linux, ARM64]
+    environment: production
+    steps:
+      - name: Aguardando aprovacao manual
+        env:
+          TAG: ${{ inputs.tag }}
+        run: echo "Aprovacao recebida para deploy da tag ${TAG} em producao."
+
+  deploy:
+    needs: approve
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/deploy-environment.yml
+    with:
+      environment: prod
+      tag: ${{ inputs.tag }}
+      ref: ${{ inputs.tag }}
+    secrets: inherit
+
+  summary:
+    needs: [validate-tag, approve, deploy]
+    if: always()
+    runs-on: [self-hosted, Linux, ARM64]
+    steps:
+      - name: Resumo do workflow
+        env:
+          TAG: ${{ inputs.tag }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          RESULT_LABEL="SUCESSO"
+          if [ "$DEPLOY_RESULT" != "success" ]; then
+            RESULT_LABEL="FALHA"
+          fi
+
+          {
+            echo "## Deployment Summary"
+            echo
+            echo "| Campo | Valor |"
+            echo "| --- | --- |"
+            echo "| Resultado | $RESULT_LABEL |"
+            echo "| Environment | prod |"
+            echo "| Tag version deployada | \`$TAG\` |"
+            echo "| Ref usado | \`$TAG\` |"
+            echo "| Status deploy | \`$DEPLOY_RESULT\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
