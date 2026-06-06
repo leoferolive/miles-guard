@@ -1,19 +1,34 @@
-import { env } from './env.js';
+import { listen } from '@nossoradar/db';
+import { NOTIFY_CHANNELS } from '@nossoradar/shared';
 
-/**
- * Worker WhatsApp (singleton — ADR-0004).
- *
- * Fase 2+ (a implementar):
- *  - conectar Baileys e restaurar a Sessão WhatsApp de WA_SESSION_PATH (PVC);
- *  - LISTEN config_changed / refresh_groups no Postgres (ADR-0003);
- *  - aplicar matchKeywords por JID (de @nossoradar/core);
- *  - inserir Detecção + NOTIFY detection_created;
- *  - enviar Alerta de Detecção ao Telegram.
- */
+import { WhatsAppWorker } from './whatsapp.js';
+
+/** Worker WhatsApp (singleton — ADR-0004). */
 async function main(): Promise<void> {
   console.log('[worker] nossoRadar worker iniciando...');
-  console.log(`[worker] sessão WhatsApp em: ${env.WA_SESSION_PATH}`);
-  console.log('[worker] (stub) aguardando implementação da Fase 2.');
+
+  const worker = new WhatsAppWorker();
+  await worker.reloadConfig();
+
+  // Barramento web → worker (ADR-0003)
+  await listen(NOTIFY_CHANNELS.configChanged, () => {
+    console.log('[worker] config_changed recebido — recarregando.');
+    void worker.reloadConfig();
+  });
+  await listen(NOTIFY_CHANNELS.refreshGroups, () => {
+    console.log('[worker] refresh_groups recebido.');
+    void worker.refreshGroups();
+  });
+
+  await worker.connect();
+
+  const shutdown = (): void => {
+    console.log('[worker] encerrando...');
+    worker.stop();
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 main().catch((err: unknown) => {

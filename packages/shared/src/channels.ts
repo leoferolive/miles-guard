@@ -11,6 +11,8 @@ export const NOTIFY_CHANNELS = {
   detectionCreated: 'detection_created',
   /** worker → web: status da conexão / QR mudou. */
   connectionState: 'connection_state',
+  /** worker → web: a lista de grupos (whatsapp_groups) foi atualizada. */
+  groupsRefreshed: 'groups_refreshed',
 } as const;
 
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[keyof typeof NOTIFY_CHANNELS];
