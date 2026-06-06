@@ -3,7 +3,7 @@ import fp from 'fastify-plugin';
 
 import { env } from '../env.js';
 
-/** Payload do JWT de sessão (ADR-0005). */
+/** Payload do JWT de sessão (ADR-0007). */
 declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: { sub: string; email: string };

@@ -23,18 +23,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setUser(null);
   }, []);
 
-  const login = useCallback(async (nextToken: string) => {
-    setStoredToken(nextToken);
-    setToken(nextToken);
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      const me = await radarService.me();
+      // ADR-0007: troca e-mail+senha por { token, user } numa única chamada.
+      const { token: nextToken, user: me } = await radarService.login(email, password);
+      setStoredToken(nextToken);
+      setToken(nextToken);
       setUser(me);
-    } catch {
-      // Token inválido/expirado: encerra a sessão.
+    } catch (err) {
+      // Credenciais inválidas / falha: garante sessão limpa e propaga p/ o formulário.
       clearStoredToken();
       setToken(null);
       setUser(null);
+      throw err;
     } finally {
       setLoading(false);
     }

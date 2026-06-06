@@ -49,8 +49,25 @@ function buildDetectionsQuery(query: ListDetectionsQuery = {}): string {
   return qs ? `?${qs}` : '';
 }
 
+export interface LoginResult {
+  token: string;
+  user: AuthUser;
+}
+
 /** Camada de serviço: cada método mapeia um endpoint do Painel. */
 export const radarService = {
+  /**
+   * Login do dono (ADR-0007): e-mail + senha → { token, user }.
+   * `skipUnauthorizedHandler`: um 401 aqui é "credenciais inválidas" (erro a exibir
+   * no formulário), não uma sessão expirada — não deve disparar o redirect global.
+   */
+  login: (email: string, password: string): Promise<LoginResult> =>
+    apiClient.post<LoginResult>(
+      '/api/auth/login',
+      { email, password },
+      { skipUnauthorizedHandler: true },
+    ),
+
   me: (): Promise<AuthUser> => apiClient.get<AuthUser>('/api/me'),
 
   // --- Conexão ---

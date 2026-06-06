@@ -1,4 +1,4 @@
-# Painel (web): Fastify servindo API + WebSocket + OAuth + SPA React estática
+# Painel (web): Fastify servindo API + WebSocket + login email/senha + SPA React estática
 # (deployment combinado — ver plano/CONTEXT). Antes do app subir, um
 # initContainer roda as migrations Drizzle (mesma imagem).
 apiVersion: apps/v1

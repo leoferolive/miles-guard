@@ -20,7 +20,7 @@ Manifests YAML crus (sem Helm/Kustomize), padrão da casa
 - **worker** — `Deployment` singleton (`replicas: 1`, `strategy: Recreate`) com PVC
   da Sessão WhatsApp montado em `/session` (ADR-0004). Nunca escalar (sem HPA/KEDA).
   Expõe `/healthz` e `/metrics` na porta 3001.
-- **web** (Painel) — `Deployment` (Fastify servindo API + WS + OAuth + SPA React).
+- **web** (Painel) — `Deployment` (Fastify servindo API + WS + login email/senha + SPA React).
   `initContainer` `db-migrate` roda as migrations Drizzle (mesma imagem) antes do app.
   Expõe `/healthz` e `/metrics` na porta 3000.
 - **ingress** — Traefik (`entrypoints: web`, HTTP) → Service `nossoradar-web`. TLS
@@ -53,15 +53,15 @@ Secrets reais out-of-band (exemplos para prod; troque o namespace por
 `nossoradar-dev` no dev):
 
 ```bash
+# Gere o hash bcrypt da senha do dono (ADR-0007) ANTES — nunca guarde a senha em texto:
+#   AUTH_PASSWORD_HASH=$(node -e "console.log(require('bcryptjs').hashSync(process.argv[1],10))" 'SUASENHA')
 kubectl create secret generic nossoradar-secrets \
   --namespace nossoradar \
   --from-literal=DATABASE_URL='postgresql://nossoradar:SENHA@nossoradar-postgres:5432/nossoradar' \
   --from-literal=JWT_SECRET=$(openssl rand -hex 32) \
-  --from-literal=GOOGLE_CLIENT_ID='...apps.googleusercontent.com' \
-  --from-literal=GOOGLE_CLIENT_SECRET='...' \
+  --from-literal=AUTH_PASSWORD_HASH="$AUTH_PASSWORD_HASH" \
   --from-literal=TELEGRAM_BOT_TOKEN='...' \
-  --from-literal=TELEGRAM_CHAT_ID='...' \
-  --from-literal=ALLOWED_EMAILS='leoferolive@gmail.com'
+  --from-literal=TELEGRAM_CHAT_ID='...'
 
 kubectl create secret generic nossoradar-postgres-secrets \
   --namespace nossoradar \
@@ -79,17 +79,24 @@ kubectl create secret generic nossoradar-postgres-secrets \
 | --------------------------------------- | ----------- |
 | `DATABASE_URL`                          | Montar a partir das credenciais do Postgres abaixo |
 | `JWT_SECRET`                            | `openssl rand -hex 32` (≥ 32 chars em prod — fail-fast no app) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Reaproveitar a credencial OAuth do **nossalista** (ADR-0005) |
+| `AUTH_PASSWORD_HASH`                     | Hash bcrypt da senha do dono (ADR-0007); obrigatório em prod. Gere com `node -e "console.log(require('bcryptjs').hashSync(process.argv[1],10))" 'SUASENHA'` |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Bot do Telegram do usuário (Alerta de Detecção) |
-| `ALLOWED_EMAILS`                        | E-mail(s) da allowlist; obrigatório e não-vazio em prod (ADR-0005) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Geradas aqui; reusadas no `DATABASE_URL` |
 
-### 3. Google OAuth — redirect URIs
+> `AUTH_EMAIL` (e-mail do dono) NÃO é segredo: vive no `nossoradar-config`
+> (configmap), default `leoferolive@gmail.com`.
 
-No Google Cloud Console, adicionar aos **Authorized redirect URIs** do OAuth Client:
+### 3. Senha do dono — hash bcrypt (ADR-0007)
 
-- `https://nossoradar.leoferolive.com.br/api/auth/google/callback` (prod)
-- `https://nossoradar-dev.leoferolive.com.br/api/auth/google/callback` (dev)
+O login é por e-mail + senha (sem provedor externo). Gere o **hash bcrypt** da senha
+e coloque-o em `AUTH_PASSWORD_HASH` (Secret `nossoradar-secrets`) — **nunca** a senha
+em texto:
+
+```bash
+node -e "console.log(require('bcryptjs').hashSync(process.argv[1],10))" 'SUASENHA'
+```
+
+`AUTH_EMAIL` (default `leoferolive@gmail.com`) fica no `nossoradar-config`.
 
 ### 4. CRDs do Prometheus Operator (para `ServiceMonitor`/`PrometheusRule`)
 

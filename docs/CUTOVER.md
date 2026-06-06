@@ -16,9 +16,12 @@ valide ponta a ponta, e só então promova para prod.
 - 🧑‍💻 **Cluster** (ver `k8s/README.md` §Pré-requisitos): `ghcr-secret` nos **dois**
   namespaces; Secrets `nossoradar-secrets` + `nossoradar-postgres-secrets` (com
   `DATABASE_URL` casando as credenciais do Postgres); CRDs do kube-prometheus-stack.
-- 🧑‍💻 **Google Cloud** (ADR-0005): adicionar os redirect URIs
-  `https://nossoradar.leoferolive.com.br/api/auth/google/callback` e o equivalente
-  `nossoradar-dev` ao OAuth Client (reaproveitado do nossalista).
+- 🧑‍💻 **Senha do dono** (ADR-0007): gerar o **hash bcrypt** da senha e definir
+  `AUTH_PASSWORD_HASH` no Secret `nossoradar-secrets` (prod e dev). Comando:
+  ```bash
+  node -e "console.log(require('bcryptjs').hashSync(process.argv[1],10))" 'SUASENHA'
+  ```
+  O `AUTH_EMAIL` (default `leoferolive@gmail.com`) fica no `nossoradar-config` (não-secreto).
 - 🧑‍💻 **Cloudflare Tunnel**: rotear os hosts `nossoradar[-dev].leoferolive.com.br`
   para o Traefik (TLS na borda).
 
@@ -35,8 +38,10 @@ kubectl rollout status deployment/nossoradar-worker -n nossoradar-dev
 
 ## 2. Login no Painel
 
-Abrir `https://nossoradar-dev.leoferolive.com.br` → **Entrar com Google**.
-**Portão:** só um e-mail da `ALLOWED_EMAILS` entra; qualquer outro → 403 (ADR-0005).
+Abrir `https://nossoradar-dev.leoferolive.com.br` → **formulário e-mail + senha**
+(ADR-0007). Entrar com `AUTH_EMAIL` + a senha cuja hash está em `AUTH_PASSWORD_HASH`.
+**Portão:** credenciais corretas → entra; e-mail ou senha errados → **401**
+(`Credenciais inválidas.`).
 
 ## 3. 🧑‍💻 Parear o WhatsApp
 
@@ -78,8 +83,8 @@ namespace `nossoradar`) — inclusive o **pareamento do QR em prod** (sessão pr
 ## 🧑‍💻 Depende exclusivamente de você (checklist)
 
 - [ ] GitHub: secrets `GHCR_PAT` / `KUBECONFIG` / `TAILSCALE_AUTHKEY`, Environment `production`, runner ARM64.
-- [ ] Cluster: `ghcr-secret` (2 namespaces), `nossoradar-secrets`, `nossoradar-postgres-secrets`.
-- [ ] Google Cloud: redirect URIs (prod + dev) no OAuth Client.
+- [ ] Cluster: `ghcr-secret` (2 namespaces), `nossoradar-secrets` (incl. `AUTH_PASSWORD_HASH`), `nossoradar-postgres-secrets`.
+- [ ] Senha do dono: gerar o hash bcrypt e setar `AUTH_PASSWORD_HASH` (prod + dev).
 - [ ] Cloudflare Tunnel: hosts `nossoradar[-dev].leoferolive.com.br` → Traefik.
 - [ ] Telegram: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (bot do dono).
 - [ ] Parear o WhatsApp (QR) — em dev e em prod.

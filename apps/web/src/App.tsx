@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/protected-route';
 import { RealtimeProvider } from '@/components/realtime-provider';
 import { AuthProvider } from '@/contexts/auth-context';
-import { AuthCallbackPage } from '@/pages/auth-callback-page';
 import { ConexaoPage } from '@/pages/conexao-page';
 import { ContaPage } from '@/pages/conta-page';
 import { DeteccoesPage } from '@/pages/deteccoes-page';
@@ -17,7 +16,6 @@ export function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
             <Route
               path="/conexao"

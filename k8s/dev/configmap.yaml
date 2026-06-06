@@ -13,6 +13,8 @@ data:
   # CORS: o próprio host (o Painel serve a SPA no mesmo domínio).
   CORS_ORIGIN: https://nossoradar-dev.leoferolive.com.br
   JWT_EXPIRES_IN: 7d
+  # Único e-mail aceito no login (ADR-0007); a senha (hash) está no Secret.
+  AUTH_EMAIL: leoferolive@gmail.com
   # --- Worker WhatsApp ---
   # Sessão Baileys persistida no PVC (ADR-0004): reconecta sem novo QR.
   WA_SESSION_PATH: /session

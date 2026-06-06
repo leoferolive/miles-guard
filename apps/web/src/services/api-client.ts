@@ -1,5 +1,5 @@
 /**
- * Cliente HTTP do Painel. Single-user, JWT único (sem refresh token — ADR-0005):
+ * Cliente HTTP do Painel. Single-user, JWT único (sem refresh token — ADR-0007):
  * anexa `Authorization: Bearer <token>` e, em 401, limpa a sessão e redireciona ao login.
  *
  * Espelha o api-client do nossagrana, simplificado para o fluxo de token único do nossoRadar.
@@ -36,7 +36,11 @@ export class ApiClient {
     this.onUnauthorized = options.onUnauthorized;
   }
 
-  async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(
+    path: string,
+    options: RequestInit = {},
+    opts: { skipUnauthorizedHandler?: boolean } = {},
+  ): Promise<T> {
     const { headers, ...rest } = options;
     const token = this.getToken();
 
@@ -45,7 +49,7 @@ export class ApiClient {
       headers: this.buildHeaders(headers, token),
     });
 
-    if (response.status === 401) {
+    if (response.status === 401 && !opts.skipUnauthorizedHandler) {
       // Token ausente/expirado: encerra a sessão (limpa + redireciona).
       this.onUnauthorized();
       throw new ApiError(401, 'Não autorizado');
@@ -73,12 +77,20 @@ export class ApiClient {
     return this.request<T>(path, { method: 'GET' });
   }
 
-  post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>(path, {
-      method: 'POST',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+  post<T>(
+    path: string,
+    body?: unknown,
+    opts: { skipUnauthorizedHandler?: boolean } = {},
+  ): Promise<T> {
+    return this.request<T>(
+      path,
+      {
+        method: 'POST',
+        headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
+      opts,
+    );
   }
 
   patch<T>(path: string, body?: unknown): Promise<T> {

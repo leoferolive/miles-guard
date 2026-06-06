@@ -5,7 +5,12 @@ config();
 
 const INSECURE_JWT_DEFAULT = 'dev-inseguro-troque-por-32+-caracteres-aleatorios';
 
-const isProd = process.env.NODE_ENV === 'production';
+/**
+ * Hash bcrypt da senha de dev (texto: `dev`) — APENAS para subir o app em dev/test
+ * sem precisar gerar um hash. Em produção é proibido (fail-fast no superRefine).
+ * Gerado com: bcryptjs.hashSync('dev', 10).
+ */
+export const DEV_PASSWORD_HASH = '$2a$10$so4f68IybCBgMr4kI4R92OHh1qzPqMqAdtrNf4MJUWNOUOidQ2n62';
 
 /**
  * Schema do ambiente do Painel. Fora de produção há defaults seguros para dev/test;
@@ -21,20 +26,19 @@ const envSchema = z
     /** Override do diretório do build da SPA (apps/web/dist). Vazio = auto-resolve. */
     WEB_DIST_PATH: z.string().optional(),
     JWT_SECRET: z.string().default(INSECURE_JWT_DEFAULT),
-    /** Validade do JWT de sessão (ADR-0005: 7 dias). */
+    /** Validade do JWT de sessão (ADR-0007: 7 dias). */
     JWT_EXPIRES_IN: z.string().default('7d'),
-    GOOGLE_CLIENT_ID: z.string().default(''),
-    GOOGLE_CLIENT_SECRET: z.string().default(''),
-    /** Allowlist (ADR-0005): SOMENTE estes e-mails podem logar. */
-    ALLOWED_EMAILS: z
+    /** E-mail do dono — único e-mail aceito no login (ADR-0007). */
+    AUTH_EMAIL: z
       .string()
-      .default('')
-      .transform((raw) =>
-        raw
-          .split(',')
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean),
-      ),
+      .default('leoferolive@gmail.com')
+      .transform((s) => s.trim().toLowerCase()),
+    /**
+     * Hash bcrypt da senha do dono (ADR-0007). NUNCA guardamos a senha em texto.
+     * Em dev/test há um hash default (senha `dev`) para o app subir; em produção
+     * é obrigatório e não-vazio (fail-fast).
+     */
+    AUTH_PASSWORD_HASH: z.string().default(DEV_PASSWORD_HASH),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV !== 'production') return;
@@ -54,35 +58,37 @@ const envSchema = z
       });
     }
 
-    // Em produção a allowlist NÃO pode ser vazia (senão ninguém — ou qualquer um — entra).
-    if (data.ALLOWED_EMAILS.length === 0) {
+    // Em produção o hash da senha NÃO pode ser vazio nem o default de dev
+    // (senão ninguém — ou qualquer um conhecendo a senha `dev` — entraria).
+    if (!data.AUTH_PASSWORD_HASH || data.AUTH_PASSWORD_HASH === DEV_PASSWORD_HASH) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['ALLOWED_EMAILS'],
-        message: 'ALLOWED_EMAILS é obrigatório em produção (não pode ser vazio).',
+        path: ['AUTH_PASSWORD_HASH'],
+        message: 'AUTH_PASSWORD_HASH é obrigatório em produção (gere um hash bcrypt real).',
       });
     }
   });
 
-const parsed = envSchema.safeParse(process.env);
+export type Env = z.infer<typeof envSchema>;
+
+/**
+ * Validação pura do ambiente (ADR-0007), isolada para ser testável sem matar o
+ * processo. Retorna `{ success, data }` ou `{ success: false, error }`.
+ */
+export function parseEnv(source: NodeJS.ProcessEnv = process.env): z.SafeParseReturnType<
+  unknown,
+  Env
+> {
+  return envSchema.safeParse(source);
+}
+
+const parsed = parseEnv(process.env);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console
   console.error('Variáveis de ambiente inválidas:', parsed.error.flatten().fieldErrors);
-  if (isProd) process.exit(1);
+  if (process.env.NODE_ENV === 'production') process.exit(1);
   throw new Error('Variáveis de ambiente inválidas');
 }
 
 export const env = parsed.data;
-
-/**
- * Decisão de allowlist (ADR-0005), isolada para ser testável diretamente.
- * Retorna true se o e-mail (case-insensitive) está na allowlist.
- */
-export function isEmailAllowed(
-  email: string | undefined | null,
-  allowlist: readonly string[],
-): boolean {
-  if (!email) return false;
-  return allowlist.includes(email.trim().toLowerCase());
-}

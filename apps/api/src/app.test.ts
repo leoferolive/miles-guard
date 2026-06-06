@@ -294,11 +294,6 @@ describe('nossoRadar API', () => {
     expect(notify).toHaveBeenCalledWith('refresh_groups');
   });
 
-  it('GET /api/auth/google responde 503 quando OAuth desabilitado (sem credencial)', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/auth/google' });
-    expect(res.statusCode).toBe(503);
-  });
-
   it('POST /api/groups com body malformado retorna 400 (não 500)', async () => {
     const auth = { authorization: `Bearer ${token(app)}` };
 
