@@ -1,5 +1,5 @@
 {
-  "id": "c54a4dd4-8d8b-4cd6-b56b-ac66c0bb81e9",
+  "id": "bc87ff2c-5d31-4bd0-ad16-29f2c9050e5c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -47,7 +47,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "connection_state_singleton": {
+          "name": "connection_state_singleton",
+          "value": "\"connection_state\".\"id\" = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.detections": {
@@ -230,6 +235,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "enabled": {
           "name": "enabled",
           "type": "boolean",
@@ -246,21 +257,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "monitored_groups_jid_whatsapp_groups_jid_fk": {
-          "name": "monitored_groups_jid_whatsapp_groups_jid_fk",
-          "tableFrom": "monitored_groups",
-          "tableTo": "whatsapp_groups",
-          "columnsFrom": [
-            "jid"
-          ],
-          "columnsTo": [
-            "jid"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "monitored_groups_jid_unique": {

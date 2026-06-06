@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -18,7 +20,11 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Lista ao vivo de grupos do WhatsApp (upsert pelo worker; identidade por JID). */
+/**
+ * Cache da lista ao vivo de grupos do WhatsApp (upsert pelo worker; identidade por JID).
+ * É um CACHE da consulta ao Baileys — não é fonte de verdade. Por isso `monitored_groups`
+ * NÃO tem FK para cá (um fetch incompleto não pode apagar a config do usuário).
+ */
 export const whatsappGroups = pgTable('whatsapp_groups', {
   jid: text('jid').primaryKey(),
   name: text('name').notNull(),
@@ -26,13 +32,14 @@ export const whatsappGroups = pgTable('whatsapp_groups', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Grupo Monitorado: um grupo (por JID) que o usuário acompanha. */
+/**
+ * Grupo Monitorado: um grupo (por JID) que o usuário acompanha. Intenção DURÁVEL.
+ * Guarda um snapshot de `name` para a UI/detecção não dependerem do cache acima.
+ */
 export const monitoredGroups = pgTable('monitored_groups', {
   id: uuid('id').primaryKey().defaultRandom(),
-  jid: text('jid')
-    .notNull()
-    .unique()
-    .references(() => whatsappGroups.jid, { onDelete: 'cascade' }),
+  jid: text('jid').notNull().unique(),
+  name: text('name').notNull(),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -51,7 +58,7 @@ export const keywords = pgTable(
   (t) => [unique('keywords_group_term_uq').on(t.monitoredGroupId, t.term)],
 );
 
-/** Detecção: evento de casamento de uma mensagem com uma keyword do grupo. */
+/** Detecção: evento de casamento (append-only). Denormaliza grupo p/ sobreviver à remoção. */
 export const detections = pgTable(
   'detections',
   {
@@ -71,11 +78,18 @@ export const detections = pgTable(
   ],
 );
 
-/** Estado da conexão WhatsApp (linha única id=1, escrita pelo worker). */
-export const connectionState = pgTable('connection_state', {
-  id: integer('id').primaryKey().default(1),
-  status: text('status').notNull().default('disconnected'),
-  qr: text('qr'),
-  lastConnectedAt: timestamp('last_connected_at', { withTimezone: true }),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+/**
+ * Estado da conexão WhatsApp — LINHA ÚNICA (id=1), escrita pelo worker via upsert.
+ * O CHECK garante o invariante de singleton no banco; a migration semeia a linha 1.
+ */
+export const connectionState = pgTable(
+  'connection_state',
+  {
+    id: integer('id').primaryKey().default(1),
+    status: text('status').notNull().default('disconnected'),
+    qr: text('qr'),
+    lastConnectedAt: timestamp('last_connected_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('connection_state_singleton', sql`${t.id} = 1`)],
+);

@@ -3,7 +3,8 @@ CREATE TABLE "connection_state" (
 	"status" text DEFAULT 'disconnected' NOT NULL,
 	"qr" text,
 	"last_connected_at" timestamp with time zone,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "connection_state_singleton" CHECK ("connection_state"."id" = 1)
 );
 --> statement-breakpoint
 CREATE TABLE "detections" (
@@ -29,6 +30,7 @@ CREATE TABLE "keywords" (
 CREATE TABLE "monitored_groups" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"jid" text NOT NULL,
+	"name" text NOT NULL,
 	"enabled" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "monitored_groups_jid_unique" UNIQUE("jid")
@@ -51,6 +53,6 @@ CREATE TABLE "whatsapp_groups" (
 );
 --> statement-breakpoint
 ALTER TABLE "keywords" ADD CONSTRAINT "keywords_monitored_group_id_monitored_groups_id_fk" FOREIGN KEY ("monitored_group_id") REFERENCES "public"."monitored_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "monitored_groups" ADD CONSTRAINT "monitored_groups_jid_whatsapp_groups_jid_fk" FOREIGN KEY ("jid") REFERENCES "public"."whatsapp_groups"("jid") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "detections_detected_at_idx" ON "detections" USING btree ("detected_at");--> statement-breakpoint
-CREATE INDEX "detections_group_jid_idx" ON "detections" USING btree ("group_jid");
+CREATE INDEX "detections_group_jid_idx" ON "detections" USING btree ("group_jid");--> statement-breakpoint
+INSERT INTO "connection_state" ("id") VALUES (1) ON CONFLICT ("id") DO NOTHING;

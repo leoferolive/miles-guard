@@ -34,6 +34,7 @@ export type Keyword = z.infer<typeof keywordSchema>;
 export const monitoredGroupSchema = z.object({
   id: z.string().uuid(),
   jid: z.string(),
+  name: z.string(),
   enabled: z.boolean(),
   createdAt: z.string().datetime(),
   keywords: z.array(keywordSchema),

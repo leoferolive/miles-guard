@@ -16,9 +16,12 @@ export interface WAMessageContent {
   imageMessage?: { caption?: string | null } | null;
   videoMessage?: { caption?: string | null } | null;
   documentMessage?: { caption?: string | null } | null;
+  // Paridade com o legado: mensagens citadas. TODO(Fase 2): no Baileys real o
+  // quoted vive em extendedTextMessage.contextInfo.quotedMessage — mapear lá.
+  quotedMessage?: WAMessageContent | null;
 }
 
-/** Extrai o texto relevante de uma mensagem (texto, legenda de mídia, etc.). */
+/** Extrai o texto relevante de uma mensagem (texto, legenda de mídia, citada). */
 export function getMessageText(content: WAMessageContent | null | undefined): string | null {
   if (!content) return null;
   if (content.conversation) return content.conversation;
@@ -26,6 +29,7 @@ export function getMessageText(content: WAMessageContent | null | undefined): st
   if (content.imageMessage?.caption) return content.imageMessage.caption;
   if (content.videoMessage?.caption) return content.videoMessage.caption;
   if (content.documentMessage?.caption) return content.documentMessage.caption;
+  if (content.quotedMessage) return getMessageText(content.quotedMessage);
   return null;
 }
 
