@@ -55,21 +55,26 @@ jobs:
           RESOLVED_SHA="$(git rev-parse HEAD)"
           BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          # Os Deployments e os repositorios de imagem sao os MESMOS em dev e prod
-          # (os manifests so divergem no namespace e na tag :dev / :latest).
+          # Os Deployments e os nomes de container sao os MESMOS em dev e prod
+          # (os manifests so divergem no namespace e no pacote de imagem).
           WORKER_DEPLOYMENT="nossoradar-worker"
           WORKER_CONTAINER="worker"
-          WORKER_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-worker"
           WEB_DEPLOYMENT="nossoradar-web"
           WEB_CONTAINER="web"
-          WEB_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-web"
 
+          # Pacotes GHCR SEPARADOS por ambiente (padrao da casa): dev usa o sufixo
+          # -dev, isolando o blast radius do prune e protegendo o alvo de rollback
+          # de prod (que nunca e podado).
           if [ "$ENVIRONMENT" = "prod" ]; then
             NAMESPACE="nossoradar"
             SMOKE_HOST="nossoradar.leoferolive.com.br"
+            WORKER_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-worker"
+            WEB_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-web"
           else
             NAMESPACE="nossoradar-dev"
             SMOKE_HOST="nossoradar-dev.leoferolive.com.br"
+            WORKER_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-worker-dev"
+            WEB_IMAGE_REPOSITORY="ghcr.io/${OWNER}/nossoradar-web-dev"
           fi
 
           WORKER_IMAGE_URI="${WORKER_IMAGE_REPOSITORY}:${TAG}"

@@ -107,21 +107,24 @@ jobs:
     permissions:
       packages: write
     steps:
-      - name: Apagar imagens RC antigas do Worker (manter ultimas 3)
+      # IMPORTANTE: o prune mira SOMENTE os pacotes -dev. Os pacotes de prod
+      # (nossoradar-worker / nossoradar-web) NUNCA sao podados aqui — sao o alvo
+      # de rollback de prod.
+      - name: Apagar imagens RC antigas do Worker dev (manter ultimas 3)
         continue-on-error: true
         uses: actions/delete-package-versions@v5
         with:
-          package-name: nossoradar-worker
+          package-name: nossoradar-worker-dev
           package-type: container
           token: ${{ secrets.GITHUB_TOKEN }}
           min-versions-to-keep: 3
           ignore-versions: "^(v[0-9]+\\.[0-9]+\\.[0-9]+|latest)$"
 
-      - name: Apagar imagens RC antigas do Web (manter ultimas 3)
+      - name: Apagar imagens RC antigas do Web dev (manter ultimas 3)
         continue-on-error: true
         uses: actions/delete-package-versions@v5
         with:
-          package-name: nossoradar-web
+          package-name: nossoradar-web-dev
           package-type: container
           token: ${{ secrets.GITHUB_TOKEN }}
           min-versions-to-keep: 3
