@@ -1,4 +1,8 @@
-import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyRequest,
+} from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
   serializerCompiler,
@@ -22,9 +26,29 @@ import { wsRoutes } from './routes/ws.routes.js';
  * Factory do Painel (API + WebSocket + OAuth). Exportada para os testes injetarem via
  * `app.inject()` sem subir um servidor real. Fase 4 servirá o SPA estático aqui.
  */
+/** Redige `?token=` (o JWT do handshake WS) para não cair em access log. */
+function redactToken(url: string): string {
+  return url.replace(/([?&]token=)[^&]*/gi, '$1[REDACTED]');
+}
+
 export function buildApp(): FastifyInstance {
   const app = Fastify({
-    logger: env.NODE_ENV !== 'test',
+    logger:
+      env.NODE_ENV !== 'test'
+        ? {
+            serializers: {
+              // O JWT do WS chega como ?token= na URL; redige antes de logar.
+              req(request: FastifyRequest) {
+                return {
+                  method: request.method,
+                  url: redactToken(request.url),
+                  host: request.headers.host ?? '',
+                  remoteAddress: request.ip,
+                };
+              },
+            },
+          }
+        : false,
     trustProxy: true,
   });
 
@@ -45,9 +69,26 @@ export function buildApp(): FastifyInstance {
     return reply.code(status).send({ message: error.message });
   });
 
-  // Security headers (sem CSP — API JSON; o SPA virá na Fase 4).
+  // Security headers + CSP real: o Painel agora serve a SPA (Fase 4), então
+  // restringimos as fontes ao próprio host. A política é compatível com o bundle
+  // do Vite (script/style externos hasheados); o WS precisa de ws:/wss: em connect-src
+  // e o avatar do Google em img-src.
   void app.register(import('@fastify/helmet'), {
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        'default-src': ["'self'"],
+        'base-uri': ["'self'"],
+        'connect-src': ["'self'", 'ws:', 'wss:'],
+        'img-src': ["'self'", 'data:', 'https://*.googleusercontent.com'],
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'font-src': ["'self'", 'data:'],
+        'object-src': ["'none'"],
+        'frame-ancestors': ["'none'"],
+        'form-action': ["'self'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   });
 

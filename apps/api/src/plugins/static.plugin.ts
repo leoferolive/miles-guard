@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import fp from 'fastify-plugin';
 
+import { env } from '../env.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -16,8 +18,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * para não quebrar a API.
  */
 function resolveSpaDir(): string | null {
-  // Permite override explícito (ex.: container com layout diferente).
-  const fromEnv = process.env.WEB_DIST_PATH;
+  // Permite override explícito (ex.: container com layout diferente) — validado no env zod.
+  const fromEnv = env.WEB_DIST_PATH;
   const candidates = [
     fromEnv,
     // apps/api/dist/plugins -> ../../../web/dist (monorepo)
@@ -44,7 +46,13 @@ export const staticPlugin = fp(async (fastify) => {
 
   await fastify.register(import('@fastify/static'), {
     root: spaDir,
-    // Os assets do Vite são hasheados; cache longo é seguro.
+    // Hardening (revisão Dev Sr):
+    // - dotfiles 'deny': nunca servir arquivos ocultos (.env, .git, etc.).
+    // - index false: nada de directory-index implícito; o index.html só vai pelo fallback.
+    // - serveDotFiles default false reforça o confinamento ao root.
+    // O @fastify/static já confina ao `root` e bloqueia path traversal (../).
+    dotfiles: 'deny',
+    index: false,
     wildcard: false,
   });
 

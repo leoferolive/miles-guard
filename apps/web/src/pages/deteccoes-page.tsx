@@ -26,6 +26,9 @@ export const DeteccoesPage = () => {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [page, setPage] = useState<DetectionsPage | null>(null);
   const [offset, setOffset] = useState(0);
+  // Contador de refetch: muda quando há nova Detecção ou "Filtrar" — o efeito de
+  // `load` é a ÚNICA fonte de fetch (evita double-fetch ao combinar setOffset + load()).
+  const [reloadTick, setReloadTick] = useState(0);
   const [stats, setStats] = useState<Stats | null>(null);
   const [groups, setGroups] = useState<MonitoredGroup[]>([]);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
@@ -45,7 +48,9 @@ export const DeteccoesPage = () => {
     } catch {
       setError('Falha ao carregar as Detecções.');
     }
-  }, [filters, offset]);
+    // reloadTick entra nas deps de propósito: força refetch mesmo sem mudar offset/filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, offset, reloadTick]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -67,11 +72,12 @@ export const DeteccoesPage = () => {
       .catch(() => {});
   }, [loadStats]);
 
-  // Nova Detecção: refetch a primeira página + estatísticas; marca recém-chegadas.
+  // Nova Detecção: volta à 1ª página + refetch via tick (o efeito de `load` faz o fetch);
+  // atualiza estatísticas e marca a recém-chegada. NÃO chama load() aqui (evita double-fetch).
   useRealtime((msg) => {
     const incomingId = msg.payload;
-    if (offset !== 0) setOffset(0);
-    void load();
+    setOffset(0);
+    setReloadTick((t) => t + 1);
     void loadStats();
     if (incomingId) {
       setNewIds((prev) => new Set(prev).add(incomingId));
@@ -88,7 +94,9 @@ export const DeteccoesPage = () => {
   const applyFilters = (e: React.FormEvent) => {
     e.preventDefault();
     setOffset(0);
-    void load();
+    // Se já está no offset 0, a mudança de filtros já refaz o fetch; o tick garante
+    // refetch mesmo quando os filtros não mudaram de valor.
+    setReloadTick((t) => t + 1);
   };
 
   const resetFilters = () => {
