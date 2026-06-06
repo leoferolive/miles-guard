@@ -33,6 +33,7 @@ export function formatDetectionAlert(alert: DetectionAlert): string {
 export class TelegramNotifier {
   private readonly enabled: boolean;
   private readonly queue: QueueItem[] = [];
+  private readonly maxQueue = 500;
   private readonly intervalMs: number;
   private lastSent = 0;
   private running = false;
@@ -54,6 +55,10 @@ export class TelegramNotifier {
 
   enqueue(text: string, onSent?: () => void): void {
     if (!this.enabled) return;
+    if (this.queue.length >= this.maxQueue) {
+      this.queue.shift(); // drop-oldest para não crescer sem limite
+      console.warn('[telegram] fila cheia — descartando alerta mais antigo.');
+    }
     this.queue.push({ text, onSent });
   }
 

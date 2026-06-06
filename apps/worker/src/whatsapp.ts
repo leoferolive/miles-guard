@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 
 import {
   createMessageFingerprint,
@@ -39,16 +39,22 @@ interface MonitoredGroup {
 }
 
 /**
- * Worker WhatsApp (singleton — ADR-0004). Mantém a conexão Baileys, aplica o filtro
+ * Worker WhatsApp (singleton — ADR-0004). Mantém UMA conexão Baileys, aplica o filtro
  * por JID e grava Detecções no Postgres, notificando via LISTEN/NOTIFY e Telegram.
+ *
+ * Invariante de singleton em processo: cada `connect()` derruba o socket anterior
+ * (`teardownSocket`) e usa um contador de geração para ignorar eventos de sockets
+ * obsoletos — evitando duas conexões Baileys simultâneas na mesma conta.
  */
 export class WhatsAppWorker {
   private sock: WASocket | null = null;
+  private generation = 0;
   private monitored = new Map<string, MonitoredGroup>();
   private readonly dedup = new Map<string, number>();
   private readonly telegram = new TelegramNotifier();
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
 
   constructor() {
@@ -63,6 +69,9 @@ export class WhatsAppWorker {
   }
 
   async connect(): Promise<void> {
+    this.teardownSocket();
+    const gen = ++this.generation;
+
     await mkdir(env.WA_SESSION_PATH, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(env.WA_SESSION_PATH);
 
@@ -72,19 +81,20 @@ export class WhatsAppWorker {
     const { version } = await fetchLatestBaileysVersion();
     console.log(`[worker] usando WhatsApp Web v${version.join('.')}`);
 
-    this.sock = makeWASocket({
+    const sock = makeWASocket({
       version,
       auth: state,
       defaultQueryTimeoutMs: 60_000,
       keepAliveIntervalMs: 30_000,
     });
+    this.sock = sock;
 
-    this.sock.ev.on('creds.update', saveCreds);
-    this.sock.ev.on('connection.update', (u) => {
-      void this.onConnectionUpdate(u);
+    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('connection.update', (u) => {
+      if (gen === this.generation) void this.onConnectionUpdate(u);
     });
-    this.sock.ev.on('messages.upsert', (u) => {
-      void this.onMessages(u);
+    sock.ev.on('messages.upsert', (u) => {
+      if (gen === this.generation) void this.onMessages(u);
     });
   }
 
@@ -108,57 +118,93 @@ export class WhatsAppWorker {
 
   stop(): void {
     this.stopped = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.teardownSocket();
     this.telegram.stop();
   }
 
+  /** Encerra o socket atual e descarta seus listeners (ADR-0004: nunca dois sockets). */
+  private teardownSocket(): void {
+    if (this.sock) {
+      try {
+        this.sock.end(undefined);
+      } catch {
+        /* já encerrado */
+      }
+      this.sock = null;
+    }
+  }
+
+  private scheduleReconnect(delayMs: number): void {
+    if (this.stopped) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect();
+    }, delayMs);
+  }
+
+  private async clearSession(): Promise<void> {
+    await rm(env.WA_SESSION_PATH, { recursive: true, force: true });
+    await mkdir(env.WA_SESSION_PATH, { recursive: true });
+  }
+
   private async onConnectionUpdate(update: BaileysEventMap['connection.update']): Promise<void> {
-    const { connection, lastDisconnect, qr } = update;
+    try {
+      const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      await setQrCode(qr);
-      await notify(NOTIFY_CHANNELS.connectionState);
-      console.log('[worker] QR atualizado — pareie pelo painel.');
-    }
+      if (qr) {
+        await setQrCode(qr);
+        await notify(NOTIFY_CHANNELS.connectionState);
+        console.log('[worker] QR atualizado — pareie pelo painel.');
+      }
 
-    if (connection === 'open') {
-      this.reconnectAttempts = 0;
-      await setConnected();
-      await notify(NOTIFY_CHANNELS.connectionState);
-      console.log('[worker] conectado ao WhatsApp.');
-      setTimeout(() => {
-        void this.refreshGroups();
-      }, 2_000);
-      return;
-    }
-
-    if (connection === 'close') {
-      await setDisconnected();
-      await notify(NOTIFY_CHANNELS.connectionState);
-
-      const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
-        ?.output?.statusCode;
-      console.log(`[worker] conexão fechada (statusCode=${statusCode ?? 'n/a'}).`);
-
-      if (this.stopped || statusCode === DisconnectReason.loggedOut) {
-        if (statusCode === DisconnectReason.loggedOut) {
-          console.error('[worker] deslogado — limpe a sessão e repareie pelo painel.');
-        }
+      if (connection === 'open') {
+        this.reconnectAttempts = 0;
+        await setConnected();
+        await notify(NOTIFY_CHANNELS.connectionState);
+        console.log('[worker] conectado ao WhatsApp.');
+        setTimeout(() => {
+          void this.refreshGroups();
+        }, 2_000);
         return;
       }
 
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts += 1;
-        const delayMs = Math.min(env.WA_RECONNECT_DELAY * 2 ** (this.reconnectAttempts - 1), 30_000);
-        console.log(
-          `[worker] reconectando em ${Math.round(delayMs / 1000)}s ` +
-            `(tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts}).`,
-        );
-        setTimeout(() => {
-          void this.connect();
-        }, delayMs);
-      } else {
-        console.error('[worker] máximo de tentativas de reconexão atingido.');
+      if (connection === 'close') {
+        await setDisconnected();
+        await notify(NOTIFY_CHANNELS.connectionState);
+
+        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
+          ?.output?.statusCode;
+        console.log(`[worker] conexão fechada (statusCode=${statusCode ?? 'n/a'}).`);
+
+        if (this.stopped) return;
+
+        if (statusCode === DisconnectReason.loggedOut) {
+          console.error('[worker] deslogado — limpando a sessão para reparear.');
+          await this.clearSession();
+          this.reconnectAttempts = 0;
+          this.scheduleReconnect(2_000);
+          return;
+        }
+
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts += 1;
+          const delayMs = Math.min(env.WA_RECONNECT_DELAY * 2 ** (this.reconnectAttempts - 1), 30_000);
+          console.log(
+            `[worker] reconectando em ${Math.round(delayMs / 1000)}s ` +
+              `(tentativa ${this.reconnectAttempts}/${this.maxReconnectAttempts}).`,
+          );
+          this.scheduleReconnect(delayMs);
+        } else {
+          console.error('[worker] máximo de tentativas de reconexão atingido.');
+        }
       }
+    } catch (err) {
+      console.error('[worker] erro no connection.update:', err);
     }
   }
 
@@ -209,6 +255,8 @@ export class WhatsAppWorker {
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
 
+    // `notified_telegram` só vira true quando o envio confirma (onSent). Se o Telegram
+    // estiver desabilitado, fica false (= não confirmado), por design.
     const time = new Date(ts * 1000).toLocaleTimeString('pt-BR');
     this.telegram.enqueue(
       formatDetectionAlert({ groupName: monitored.name, sender, text, matchedKeywords: matched, time }),
