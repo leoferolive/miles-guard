@@ -69,7 +69,8 @@ COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 # Bundle do SPA: o static.plugin resolve apps/web/dist relativo a apps/api/dist/plugins.
 COPY --from=builder /app/apps/web/dist ./apps/web/dist
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Usuário não-root com UID fixo (1001) — os manifests k8s referenciam runAsUser: 1001.
+RUN addgroup -S appgroup && adduser -S -u 1001 -G appgroup appuser
 USER appuser
 
 EXPOSE 3000

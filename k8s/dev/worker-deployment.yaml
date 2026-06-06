@@ -37,6 +37,14 @@ spec:
                 name: nossoradar-config
             - secretRef:
                 name: nossoradar-secrets
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ['ALL']
           volumeMounts:
             - name: session
               mountPath: /session
@@ -47,6 +55,14 @@ spec:
             limits:
               cpu: 750m
               memory: 512Mi
+          # startupProbe: dá folga ao cold-start (Baileys busca a versão do WhatsApp
+          # Web online no boot) antes de liveness começar a matar o pod.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            periodSeconds: 5
+            failureThreshold: 30
           # Probes no servidor de health/metrics (não no socket WhatsApp): o pod
           # fica Ready mesmo aguardando pareamento, mas reinicia se o processo travar.
           readinessProbe:

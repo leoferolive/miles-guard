@@ -98,7 +98,8 @@ export function buildApp(): FastifyInstance {
     void app.register(import('@fastify/rate-limit'), {
       max: 100,
       timeWindow: '1 minute',
-      allowList: (req) => req.url === '/healthz',
+      // Probes e scrape de métricas não devem consumir o orçamento de rate-limit.
+      allowList: (req) => req.url === '/healthz' || req.url === '/metrics',
     });
   }
 

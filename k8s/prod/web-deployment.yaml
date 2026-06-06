@@ -32,6 +32,14 @@ spec:
                 name: nossoradar-config
             - secretRef:
                 name: nossoradar-secrets
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ['ALL']
           resources:
             requests:
               cpu: 50m
@@ -51,6 +59,14 @@ spec:
                 name: nossoradar-config
             - secretRef:
                 name: nossoradar-secrets
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ['ALL']
           resources:
             requests:
               cpu: 50m
