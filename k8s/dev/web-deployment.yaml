@@ -24,7 +24,7 @@ spec:
         # Migrations idempotentes: rodam a cada deploy antes do app aceitar tráfego.
         # Usa a MESMA imagem do web (carrega packages/db/dist/migrate.js + migrations).
         - name: db-migrate
-          image: ghcr.io/leoferolive/nossoradar-web:dev
+          image: ghcr.io/leoferolive/nossoradar-web-dev:dev
           imagePullPolicy: Always
           command: ['node', 'packages/db/dist/migrate.js']
           envFrom:
@@ -49,7 +49,7 @@ spec:
               memory: 256Mi
       containers:
         - name: web
-          image: ghcr.io/leoferolive/nossoradar-web:dev
+          image: ghcr.io/leoferolive/nossoradar-web-dev:dev
           imagePullPolicy: Always
           ports:
             - name: http

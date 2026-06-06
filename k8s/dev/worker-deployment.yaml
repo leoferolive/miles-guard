@@ -27,7 +27,7 @@ spec:
             claimName: nossoradar-worker-session
       containers:
         - name: worker
-          image: ghcr.io/leoferolive/nossoradar-worker:dev
+          image: ghcr.io/leoferolive/nossoradar-worker-dev:dev
           imagePullPolicy: Always
           ports:
             - name: http

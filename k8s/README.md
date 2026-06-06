@@ -3,10 +3,15 @@
 Manifests YAML crus (sem Helm/Kustomize), padrão da casa
 (`nossalista`/`nossagrana`/`chat-api`). Dois ambientes:
 
-| Ambiente | Namespace        | Host                                    | Tags de imagem |
-| -------- | ---------------- | --------------------------------------- | -------------- |
-| dev      | `nossoradar-dev` | `nossoradar-dev.leoferolive.com.br`     | `:dev`         |
-| prod     | `nossoradar`     | `nossoradar.leoferolive.com.br`         | `:latest`      |
+| Ambiente | Namespace        | Host                                | Pacotes GHCR (worker / web)                            | Tags          |
+| -------- | ---------------- | ----------------------------------- | ------------------------------------------------------ | ------------- |
+| dev      | `nossoradar-dev` | `nossoradar-dev.leoferolive.com.br` | `nossoradar-worker-dev` / `nossoradar-web-dev`         | `:dev`, RC    |
+| prod     | `nossoradar`     | `nossoradar.leoferolive.com.br`     | `nossoradar-worker` / `nossoradar-web`                 | `:latest`, `vX.Y.Z` |
+
+> **Pacotes GHCR separados por ambiente** (padrão da casa): dev publica nos
+> pacotes `-dev` e prod nos pacotes sem sufixo. O prune de RC antigas só toca os
+> pacotes `-dev`; os pacotes de prod **nunca** são podados (são o alvo de rollback).
+> Cada build de prod empurra a tag semver **imutável** `vX.Y.Z` além de `:latest`.
 
 ## Workloads
 
@@ -28,13 +33,17 @@ Manifests YAML crus (sem Helm/Kustomize), padrão da casa
 
 ### 1. `ghcr-secret` (pull das imagens privadas do GHCR)
 
+Precisa existir nos **DOIS** namespaces **antes do primeiro deploy** (o CI não o
+cria) — `nossoradar` puxa os pacotes de prod, `nossoradar-dev` puxa os `-dev`:
+
 ```bash
-kubectl create secret docker-registry ghcr-secret \
-  --namespace nossoradar \
-  --docker-server=ghcr.io \
-  --docker-username=leoferolive \
-  --docker-password="$GHCR_PAT"   # PAT com escopo read:packages
-# repita com --namespace nossoradar-dev para o ambiente de dev
+for NS in nossoradar nossoradar-dev; do
+  kubectl create secret docker-registry ghcr-secret \
+    --namespace "$NS" \
+    --docker-server=ghcr.io \
+    --docker-username=leoferolive \
+    --docker-password="$GHCR_PAT"   # PAT com escopo read:packages
+done
 ```
 
 ### 2. Secrets da aplicação e do Postgres (NUNCA commitados)
@@ -119,6 +128,26 @@ curl -s http://localhost:8081/metrics | grep nossoradar_worker_whatsapp_connecte
 
 Parear o WhatsApp pelo Painel (QR na tela de Conexão). Ao reiniciar o pod do worker,
 ele reconecta usando a Sessão do PVC **sem novo QR** (ADR-0004).
+
+## Rollback de prod (reproduzível)
+
+Cada deploy de prod empurra a tag semver **imutável** `vX.Y.Z` (além de `:latest`)
+para os pacotes de prod, que **nunca** são podados. Logo, o rollback é apontar os
+Deployments de volta para a tag boa anterior:
+
+```bash
+# Substitua vX.Y.Z pela última versão estável boa.
+kubectl set image deployment/nossoradar-worker \
+  worker=ghcr.io/leoferolive/nossoradar-worker:vX.Y.Z -n nossoradar
+kubectl set image deployment/nossoradar-web \
+  web=ghcr.io/leoferolive/nossoradar-web:vX.Y.Z -n nossoradar
+
+kubectl rollout status deployment/nossoradar-worker -n nossoradar --timeout=300s
+kubectl rollout status deployment/nossoradar-web    -n nossoradar --timeout=300s
+```
+
+> O dev nunca toca os pacotes de prod (publica e poda só os `-dev`), então a tag
+> `vX.Y.Z` permanece disponível para rollback indefinidamente.
 
 ## Rotacionar segredos
 
