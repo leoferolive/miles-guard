@@ -82,6 +82,6 @@ describe('staticPlugin (SPA dist presente)', () => {
     expect(csp).toContain('ws:');
     expect(csp).toContain('wss:');
     expect(csp).toContain("frame-ancestors 'none'");
-    expect(csp).toContain('googleusercontent.com');
+    expect(csp).toContain("img-src 'self' data:");
   });
 });

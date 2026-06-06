@@ -42,7 +42,8 @@ O processo web (Fastify + SPA React) que serve a API, o WebSocket e a autentica�
 _Evitar_: dashboard (é uma seção do Painel, não o app)
 
 **Usuário**:
-O dono — único — autenticado por Google OAuth + allowlist de e-mail.
+O dono — único — autenticado por **e-mail + senha** (ADR-0007). Há um só e-mail válido
+(`AUTH_EMAIL`); a senha é verificada contra um hash bcrypt (`AUTH_PASSWORD_HASH`, Secret).
 
 ## Relationships
 

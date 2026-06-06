@@ -13,7 +13,6 @@ import { ZodError } from 'zod';
 import { env } from './env.js';
 import { authPlugin } from './plugins/auth.plugin.js';
 import { metricsPlugin } from './plugins/metrics.plugin.js';
-import { oauthPlugin } from './plugins/oauth.plugin.js';
 import { staticPlugin } from './plugins/static.plugin.js';
 import { websocketPlugin } from './plugins/websocket.plugin.js';
 import { authRoutes } from './routes/auth.routes.js';
@@ -24,8 +23,8 @@ import { whatsappRoutes } from './routes/whatsapp.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 
 /**
- * Factory do Painel (API + WebSocket + OAuth). Exportada para os testes injetarem via
- * `app.inject()` sem subir um servidor real. Fase 4 servirá o SPA estático aqui.
+ * Factory do Painel (API + WebSocket + login email/senha). Exportada para os testes
+ * injetarem via `app.inject()` sem subir um servidor real. Serve também o SPA estático.
  */
 /** Redige `?token=` (o JWT do handshake WS) para não cair em access log. */
 function redactToken(url: string): string {
@@ -70,10 +69,9 @@ export function buildApp(): FastifyInstance {
     return reply.code(status).send({ message: error.message });
   });
 
-  // Security headers + CSP real: o Painel agora serve a SPA (Fase 4), então
-  // restringimos as fontes ao próprio host. A política é compatível com o bundle
-  // do Vite (script/style externos hasheados); o WS precisa de ws:/wss: em connect-src
-  // e o avatar do Google em img-src.
+  // Security headers + CSP real: o Painel serve a SPA, então restringimos as fontes
+  // ao próprio host. A política é compatível com o bundle do Vite (script/style
+  // externos hasheados); o WS precisa de ws:/wss: em connect-src.
   void app.register(import('@fastify/helmet'), {
     contentSecurityPolicy: {
       useDefaults: false,
@@ -81,7 +79,7 @@ export function buildApp(): FastifyInstance {
         'default-src': ["'self'"],
         'base-uri': ["'self'"],
         'connect-src': ["'self'", 'ws:', 'wss:'],
-        'img-src': ["'self'", 'data:', 'https://*.googleusercontent.com'],
+        'img-src': ["'self'", 'data:'],
         'script-src': ["'self'"],
         'style-src': ["'self'", "'unsafe-inline'"],
         'font-src': ["'self'", 'data:'],
@@ -93,7 +91,8 @@ export function buildApp(): FastifyInstance {
     crossOriginEmbedderPolicy: false,
   });
 
-  // Rate limiting global (desabilitado em testes). Cobre callback de auth e upgrade do WS.
+  // Rate limiting global (desabilitado em testes). O /api/auth/login tem um limite
+  // por-rota mais estrito (ver auth.routes.ts) contra brute force.
   if (env.NODE_ENV !== 'test') {
     void app.register(import('@fastify/rate-limit'), {
       max: 100,
@@ -109,7 +108,6 @@ export function buildApp(): FastifyInstance {
   });
 
   void app.register(authPlugin);
-  void app.register(oauthPlugin);
   void app.register(websocketPlugin);
   // Registro Prometheus real (default metrics + contador de requests) em /metrics.
   void app.register(metricsPlugin);
