@@ -1,25 +1,31 @@
-import Fastify from 'fastify';
+import { closeDb } from '@nossoradar/db';
 
+import { buildApp } from './app.js';
 import { env } from './env.js';
 
-const app = Fastify({ logger: true });
+const app = buildApp();
 
-app.get('/healthz', async () => ({ status: 'ok' }));
+let shuttingDown = false;
 
-// Placeholder de métricas (Fase 6: Prometheus + ServiceMonitor)
-app.get('/metrics', async (_req, reply) => {
-  reply.type('text/plain');
-  return '# nossoRadar metrics (stub)\n';
-});
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info(`recebido ${signal}, encerrando...`);
+  try {
+    // app.close() roda os onClose dos plugins (ex.: unlisten do websocket.plugin)...
+    await app.close();
+    // ...e só então fechamos o pool do Postgres.
+    await closeDb();
+  } catch (err) {
+    app.log.error(err);
+  } finally {
+    process.exit(0);
+  }
+}
 
-/**
- * Fase 4+ (a implementar):
- *  - GET /api/auth/google + callback (allowlist ALLOWED_EMAILS) + JWT;
- *  - CRUD de Grupos Monitorados e Palavras-chave (NOTIFY config_changed);
- *  - GET detecções / stats;
- *  - WebSocket: QR/status/feed via LISTEN no Postgres;
- *  - servir o SPA React buildado.
- */
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+
 async function start(): Promise<void> {
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });

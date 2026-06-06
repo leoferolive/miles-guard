@@ -1,4 +1,4 @@
-import { listen } from '@nossoradar/db';
+import { closeDb, listen } from '@nossoradar/db';
 import { NOTIFY_CHANNELS } from '@nossoradar/shared';
 
 import { WhatsAppWorker } from './whatsapp.js';
@@ -22,13 +22,17 @@ async function main(): Promise<void> {
 
   await worker.connect();
 
-  const shutdown = (): void => {
+  let shuttingDown = false;
+  const shutdown = async (): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('[worker] encerrando...');
     worker.stop();
+    await closeDb();
     process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
 }
 
 main().catch((err: unknown) => {

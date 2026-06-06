@@ -11,3 +11,8 @@ import * as schema from './schema.js';
 export const sql = postgres(DATABASE_URL);
 
 export const db = drizzle(sql, { schema });
+
+/** Encerra o pool do Postgres (e desfaz LISTEN/NOTIFY) de forma graciosa no shutdown. */
+export async function closeDb(): Promise<void> {
+  await sql.end({ timeout: 5 });
+}
