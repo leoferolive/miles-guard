@@ -1,0 +1,21 @@
+# Config NÃO-secreta compartilhada por web + worker (envFrom: configMapRef).
+# Segredos ficam em nossoradar-secrets (ver secret.template.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nossoradar-config
+  namespace: nossoradar
+data:
+  NODE_ENV: production
+  # --- Painel (web/api) ---
+  PORT: '3000'
+  PUBLIC_URL: https://nossoradar.leoferolive.com.br
+  # CORS: o próprio host (o Painel serve a SPA no mesmo domínio).
+  CORS_ORIGIN: https://nossoradar.leoferolive.com.br
+  JWT_EXPIRES_IN: 7d
+  # --- Worker WhatsApp ---
+  # Sessão Baileys persistida no PVC (ADR-0004): reconecta sem novo QR.
+  WA_SESSION_PATH: /session
+  WA_RECONNECT_DELAY: '5000'
+  # Porta do health/metrics do worker (probes + ServiceMonitor).
+  WORKER_HEALTH_PORT: '3001'

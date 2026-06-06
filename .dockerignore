@@ -1,0 +1,27 @@
+# Build context para Dockerfile.web / Dockerfile.worker.
+# O build acontece DENTRO do container (COPY . . + pnpm build); então
+# ignoramos artefatos e segredos do host para um contexto enxuto e reprodutível.
+.env
+.env.*
+.git
+.github
+.gitignore
+.claude
+.turbo
+.session
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+*.log
+*.test.ts
+*.test.tsx
+k8s
+docs
+legacy
+docker-compose.yml
+Dockerfile.web
+Dockerfile.worker
+.dockerignore

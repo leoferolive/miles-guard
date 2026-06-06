@@ -1,0 +1,80 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# nossoRadar — Painel (Fastify API + WebSocket + OAuth + SPA React estática)
+# Multi-stage: builda @nossoradar/{shared,core,db} + apps/web (Vite) + apps/api,
+# copia o bundle do front (apps/web/dist) para a imagem e roda
+# `node apps/api/dist/server.js` (serve SPA + API + WS) como não-root.
+# Imagem alvo: ghcr.io/leoferolive/nossoradar-web (arm64 no k3s do Pi).
+#
+# A mesma imagem serve o initContainer de migrations no k8s
+# (`node packages/db/dist/migrate.js`).
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+RUN corepack enable
+
+# 1) Manifests primeiro → instalação cacheável.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY apps/api/package.json apps/api/package.json
+
+RUN pnpm install --frozen-lockfile
+
+# 2) Código + build. Front (Vite) primeiro, depois a API.
+COPY . .
+RUN pnpm --filter @nossoradar/shared build \
+  && pnpm --filter @nossoradar/core build \
+  && pnpm --filter @nossoradar/db build \
+  && pnpm --filter @nossoradar/web build \
+  && pnpm --filter @nossoradar/api build
+
+# Migrations .sql ao lado do build do db (initContainer as resolve em dist/migrations).
+RUN cp -r packages/db/src/migrations packages/db/dist/migrations
+
+# 3) Poda devDependencies do node_modules de runtime.
+RUN pnpm prune --prod
+
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+RUN apk add --no-cache curl
+
+ARG APP_VERSION=dev
+ARG GIT_SHA=unknown
+ENV APP_VERSION=${APP_VERSION} GIT_SHA=${GIT_SHA}
+
+# node_modules da raiz (store .pnpm) + dist/manifests/node_modules (symlinks pnpm)
+# de cada pacote/app usado. Os symlinks per-package apontam para ../../../node_modules/.pnpm.
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/core/dist ./packages/core/dist
+COPY --from=builder /app/packages/core/package.json ./packages/core/package.json
+COPY --from=builder /app/packages/db/dist ./packages/db/dist
+COPY --from=builder /app/packages/db/package.json ./packages/db/package.json
+COPY --from=builder /app/packages/db/node_modules ./packages/db/node_modules
+
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+# Bundle do SPA: o static.plugin resolve apps/web/dist relativo a apps/api/dist/plugins.
+COPY --from=builder /app/apps/web/dist ./apps/web/dist
+
+# Usuário não-root com UID fixo (1001) — os manifests k8s referenciam runAsUser: 1001.
+RUN addgroup -S appgroup && adduser -S -u 1001 -G appgroup appuser
+USER appuser
+
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:3000/healthz || exit 1
+
+CMD ["node", "apps/api/dist/server.js"]

@@ -152,6 +152,18 @@ describe('nossoRadar API', () => {
     expect(res.json()).toEqual({ status: 'ok' });
   });
 
+  it('GET /metrics expõe registro Prometheus real sem auth', async () => {
+    // Gera ao menos um request contado antes do scrape.
+    await app.inject({ method: 'GET', url: '/healthz' });
+
+    const res = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    // Métricas padrão de processo + o contador de requests HTTP do Painel.
+    expect(res.body).toContain('nossoradar_web_process_cpu_seconds_total');
+    expect(res.body).toContain('nossoradar_web_http_requests_total');
+  });
+
   it('rejeita rotas protegidas sem JWT (401)', async () => {
     for (const url of [
       '/api/me',

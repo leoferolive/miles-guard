@@ -1,0 +1,79 @@
+# PrometheusRule (kube-prometheus-stack, label `release: kps`). Alertas roteados
+# ao AlertManager → Telegram de infra (Alerta de Infra, distinto do Alerta de
+# Detecção do produto — ver CONTEXT.md).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nossoradar-dev
+  namespace: nossoradar-dev
+  labels:
+    app: nossoradar
+    release: kps
+spec:
+  groups:
+    - name: nossoradar.whatsapp
+      interval: 30s
+      rules:
+        - alert: NossoradarWorkerWhatsappDisconnected
+          # Alerta genuinamente útil: o worker está de pé mas a Sessão WhatsApp
+          # caiu (gauge 0). 10min tolera reconexões/backoff transitórios.
+          expr: nossoradar_worker_whatsapp_connected{namespace="nossoradar-dev"} == 0
+          for: 10m
+          labels:
+            severity: critical
+            namespace: nossoradar-dev
+          annotations:
+            summary: 'nossoRadar: worker desconectado do WhatsApp'
+            description: 'O worker está sem Sessão WhatsApp há 10min. Verificar pareamento (QR no Painel) e logs do pod.'
+
+        - alert: NossoradarWorkerMetricsAbsent
+          # O target do worker sumiu do scrape (pod morto/CrashLoop ou /metrics
+          # inacessível) — não dá pra confiar no gauge acima, então alerta à parte.
+          expr: absent(nossoradar_worker_whatsapp_connected{namespace="nossoradar-dev"})
+          for: 5m
+          labels:
+            severity: critical
+            namespace: nossoradar-dev
+          annotations:
+            summary: 'nossoRadar: métricas do worker ausentes'
+            description: 'Sem scrape de nossoradar_worker_whatsapp_connected há 5min — worker provavelmente fora do ar.'
+
+    - name: nossoradar.health
+      interval: 30s
+      rules:
+        - alert: NossoradarPodNotReady
+          # Restrito a pods que DEVERIAM estar Running (exclui Jobs/initContainers
+          # já concluídos), padrão chat-api.
+          expr: |
+            kube_pod_status_ready{namespace="nossoradar-dev",condition="true"} == 0
+              and on(namespace, pod)
+            kube_pod_status_phase{namespace="nossoradar-dev",phase="Running"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            namespace: nossoradar-dev
+          annotations:
+            summary: 'nossoRadar: pod não-ready há 5min'
+            description: 'Pod {{ $labels.pod }} sem readiness — verificar logs e /healthz.'
+
+        - alert: NossoradarPodCrashLooping
+          expr: |
+            kube_pod_container_status_waiting_reason{namespace="nossoradar-dev",reason="CrashLoopBackOff"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            namespace: nossoradar-dev
+          annotations:
+            summary: 'nossoRadar: pod em CrashLoopBackOff'
+            description: 'Pod {{ $labels.pod }} em CrashLoopBackOff há 5min — verificar logs do container.'
+
+        - alert: NossoradarPodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{namespace="nossoradar-dev",reason="OOMKilled"} == 1
+          for: 1m
+          labels:
+            severity: critical
+            namespace: nossoradar-dev
+          annotations:
+            summary: 'nossoRadar: pod morto por OOMKilled'
+            description: 'Pod {{ $labels.pod }} terminado por OOM. Aumentar memory limit ou investigar leak.'

@@ -1,0 +1,15 @@
+# PVC da Sessão WhatsApp do worker (ADR-0004): persiste o auth state do Baileys
+# para reconectar após restart/redeploy sem novo QR. RWO + Recreate garantem um
+# único montador por vez (nunca dois sockets).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nossoradar-worker-session
+  namespace: nossoradar-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
