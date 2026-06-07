@@ -1,5 +1,5 @@
-import { getConnectionState } from '@nossoradar/db';
-import { connectionStateSchema, connectionStatusSchema } from '@nossoradar/shared';
+import { getConnectionState, notify } from '@nossoradar/db';
+import { NOTIFY_CHANNELS, connectionStateSchema, connectionStatusSchema } from '@nossoradar/shared';
 import type { FastifyPluginAsync } from 'fastify';
 
 export const connectionRoutes: FastifyPluginAsync = async (fastify) => {
@@ -22,4 +22,18 @@ export const connectionRoutes: FastifyPluginAsync = async (fastify) => {
       updatedAt: row.updatedAt.toISOString(),
     });
   });
+
+  /**
+   * POST /api/connection/reconnect (protegido) → pede ao worker que reset e inicie
+   * um novo ciclo de QR (NOTIFY reconnect_requested). Usado pelo botão "Gerar novo QR"
+   * quando as tentativas se esgotaram (`exhausted`) ou a sessão está `disconnected`.
+   */
+  fastify.post(
+    '/connection/reconnect',
+    { preHandler: [fastify.requireAuth] },
+    async (_request, reply) => {
+      await notify(NOTIFY_CHANNELS.reconnectRequested);
+      return reply.code(202).send({ ok: true });
+    },
+  );
 };

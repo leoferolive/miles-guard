@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
 // --- Estado da conexão WhatsApp (singleton, escrito pelo worker) ---
-export const connectionStatusSchema = z.enum(['disconnected', 'connecting', 'qr', 'connected']);
+export const connectionStatusSchema = z.enum([
+  'disconnected',
+  'connecting',
+  'qr',
+  'connected',
+  'exhausted',
+]);
 export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
 
 export const connectionStateSchema = z.object({

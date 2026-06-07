@@ -12,13 +12,15 @@ const STATUS_HELP: Record<ConnectionState['status'], string> = {
   connected: 'O worker está pareado e monitorando os grupos.',
   connecting: 'Estabelecendo conexão com o WhatsApp…',
   qr: 'Abra o WhatsApp no celular, vá em Aparelhos conectados e escaneie o código abaixo.',
-  disconnected: 'Sem sessão ativa. O worker tentará reconectar ou exibirá um novo QR.',
+  disconnected: 'Sem sessão ativa. Gere um novo QR para parear novamente.',
+  exhausted: 'Tentativas de QR esgotadas — gere um novo QR.',
 };
 
 /** Tela Conexão: status da Sessão WhatsApp + QR escaneável (push via WebSocket). */
 export const ConexaoPage = () => {
   const [state, setState] = useState<ConnectionState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -36,6 +38,21 @@ export const ConexaoPage = () => {
 
   // O worker só NOTIFY connection_state (sem payload útil) → refetch.
   useRealtime(() => void load(), NOTIFY_CHANNELS.connectionState);
+
+  const handleReconnect = useCallback(async () => {
+    setReconnecting(true);
+    setError(null);
+    try {
+      await radarService.requestReconnect();
+    } catch {
+      setError('Não foi possível solicitar um novo QR.');
+    } finally {
+      setReconnecting(false);
+    }
+  }, []);
+
+  // Sem QR ativo (desconectado ou esgotado) → oferece gerar um novo ciclo de QR.
+  const canReconnect = state?.status === 'disconnected' || state?.status === 'exhausted';
 
   return (
     <AppShell
@@ -67,6 +84,19 @@ export const ConexaoPage = () => {
             <p className="faint" style={{ fontSize: 13 }}>
               O código expira em segundos — se sumir, um novo aparece automaticamente.
             </p>
+          </div>
+        )}
+
+        {canReconnect && (
+          <div className="qr-wrap">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void handleReconnect()}
+              disabled={reconnecting}
+            >
+              {reconnecting ? 'Gerando…' : 'Gerar novo QR'}
+            </button>
           </div>
         )}
 

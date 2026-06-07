@@ -25,6 +25,10 @@ async function main(): Promise<void> {
     console.log('[worker] refresh_groups recebido.');
     void worker.refreshGroups();
   });
+  await listen(NOTIFY_CHANNELS.reconnectRequested, () => {
+    console.log('[worker] reconnect_requested');
+    void worker.requestReconnect();
+  });
 
   await worker.connect();
 

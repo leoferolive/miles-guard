@@ -7,6 +7,8 @@ export const NOTIFY_CHANNELS = {
   configChanged: 'config_changed',
   /** web → worker: busque a lista ao vivo de grupos do WhatsApp e faça upsert. */
   refreshGroups: 'refresh_groups',
+  /** web → worker: tentativas de QR esgotadas; reset e inicie um novo ciclo (novo QR). */
+  reconnectRequested: 'reconnect_requested',
   /** worker → web: uma nova Detecção foi gravada. */
   detectionCreated: 'detection_created',
   /** worker → web: status da conexão / QR mudou. */

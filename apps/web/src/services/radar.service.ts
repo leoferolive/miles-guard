@@ -72,6 +72,9 @@ export const radarService = {
 
   // --- Conexão ---
   getConnection: (): Promise<ConnectionState> => apiClient.get<ConnectionState>('/api/connection'),
+  /** Pede ao worker um novo ciclo de QR (botão "Gerar novo QR"). */
+  requestReconnect: (): Promise<void> =>
+    apiClient.post<void>('/api/connection/reconnect').then(() => undefined),
 
   // --- Grupos Monitorados ---
   listGroups: (): Promise<MonitoredGroup[]> => apiClient.get<MonitoredGroup[]>('/api/groups'),

@@ -12,6 +12,7 @@ describe('ConnectionBadge', () => {
     ['connecting', 'Conectando', 'badge-connecting'],
     ['qr', 'Aguardando QR', 'badge-qr'],
     ['disconnected', 'Desconectado', 'badge-disconnected'],
+    ['exhausted', 'Tentativas esgotadas', 'badge-disconnected'],
   ];
 
   it.each(cases)('renderiza o status %s com rótulo e classe certos', (status, label, cssClass) => {

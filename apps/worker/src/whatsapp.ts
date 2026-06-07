@@ -14,6 +14,7 @@ import {
   setConnected,
   setConnecting,
   setDisconnected,
+  setExhausted,
   setQrCode,
   upsertWhatsappGroups,
 } from '@nossoradar/db';
@@ -98,6 +99,22 @@ export class WhatsAppWorker {
     sock.ev.on('messages.upsert', (u) => {
       if (gen === this.generation) void this.onMessages(u);
     });
+  }
+
+  /**
+   * Reconexão manual (botão "Gerar novo QR" no Painel, via NOTIFY reconnect_requested).
+   * Zera o contador de tentativas e inicia um ciclo limpo (`connect()` já derruba o
+   * socket anterior). Idempotente: chamadas repetidas apenas reiniciam o ciclo.
+   */
+  async requestReconnect(): Promise<void> {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
+    this.stopped = false;
+    console.log('[worker] reconexão manual solicitada — iniciando novo ciclo de QR.');
+    await this.connect();
   }
 
   /** Sincroniza a lista ao vivo de grupos para o cache `whatsapp_groups` (seleção por JID). */
@@ -205,7 +222,14 @@ export class WhatsAppWorker {
           );
           this.scheduleReconnect(delayMs);
         } else {
-          console.error('[worker] máximo de tentativas de reconexão atingido.');
+          // Esgotou as tentativas de QR: PARA aqui (sem retries infinitos) e marca
+          // `exhausted`, para o Painel exibir o botão "Gerar novo QR" (requestReconnect).
+          await setExhausted();
+          setWhatsappConnectionState('disconnected');
+          await notify(NOTIFY_CHANNELS.connectionState);
+          console.error(
+            '[worker] tentativas de QR esgotadas — aguardando reconexão manual (Gerar novo QR).',
+          );
         }
       }
     } catch (err) {
