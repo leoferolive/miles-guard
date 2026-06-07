@@ -58,6 +58,14 @@ export class WhatsAppWorker {
   private readonly maxReconnectAttempts = 5;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /**
+   * Lock in-flight de `connect()`: serializa chamadas concorrentes para NUNCA criar
+   * dois sockets Baileys simultâneos (ADR-0004). Entre o teardown síncrono e o
+   * `makeWASocket` há awaits (auth state, NOTIFY, fetch de versão); sem o lock, um
+   * segundo `connect()` (2º clique em "Gerar novo QR" ou reconnect automático
+   * sobrepondo o manual) entraria nessa janela e abriria uma 2ª conexão à conta.
+   */
+  private connecting: Promise<void> | null = null;
 
   constructor() {
     setInterval(() => this.pruneDedup(), 30 * 60 * 1000).unref();
@@ -70,7 +78,27 @@ export class WhatsAppWorker {
     console.log(`[worker] config recarregada: ${this.monitored.size} grupo(s) monitorado(s).`);
   }
 
+  /**
+   * Estabelece (ou reestabelece) a conexão Baileys. Serializado por `this.connecting`:
+   * se já há um `connect()` em voo, esta chamada só inicia o próximo ciclo DEPOIS que o
+   * anterior concluir (teardown + makeWASocket + handlers), garantindo que nunca existam
+   * dois sockets vivos ao mesmo tempo (ADR-0004).
+   */
   async connect(): Promise<void> {
+    // Encadeia após o connect em voo (se houver) e só então roda o próprio ciclo.
+    // O `.catch(() => {})` no elo anterior evita que uma falha dele rejeite este.
+    const previous = this.connecting ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(() => this.doConnect());
+    // Mantém o lock apontando para ESTE ciclo; limpa só se ainda for o último.
+    this.connecting = run;
+    run.finally(() => {
+      if (this.connecting === run) this.connecting = null;
+    });
+    return run;
+  }
+
+  /** Um ciclo de conexão (assume execução serializada por `connect()`). */
+  private async doConnect(): Promise<void> {
     this.teardownSocket();
     const gen = ++this.generation;
 
