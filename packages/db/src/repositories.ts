@@ -40,6 +40,17 @@ export async function setDisconnected(): Promise<void> {
     .where(eq(connectionState.id, 1));
 }
 
+/**
+ * Marca a Sessão como `exhausted`: o worker esgotou as tentativas de QR e parou,
+ * aguardando um reconnect manual (botão "Gerar novo QR" no Painel).
+ */
+export async function setExhausted(): Promise<void> {
+  await db
+    .update(connectionState)
+    .set({ status: 'exhausted', qr: null, updatedAt: new Date() })
+    .where(eq(connectionState.id, 1));
+}
+
 export interface ConnectionStateRow {
   status: string;
   qr: string | null;

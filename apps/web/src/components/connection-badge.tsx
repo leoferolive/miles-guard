@@ -5,6 +5,7 @@ const LABELS: Record<ConnectionStatus, string> = {
   connecting: 'Conectando',
   qr: 'Aguardando QR',
   disconnected: 'Desconectado',
+  exhausted: 'Tentativas esgotadas',
 };
 
 const CLASS: Record<ConnectionStatus, string> = {
@@ -12,6 +13,7 @@ const CLASS: Record<ConnectionStatus, string> = {
   connecting: 'badge-connecting',
   qr: 'badge-qr',
   disconnected: 'badge-disconnected',
+  exhausted: 'badge-disconnected',
 };
 
 interface ConnectionBadgeProps {

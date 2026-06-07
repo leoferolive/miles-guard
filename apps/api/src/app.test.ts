@@ -294,6 +294,23 @@ describe('nossoRadar API', () => {
     expect(notify).toHaveBeenCalledWith('refresh_groups');
   });
 
+  it('POST /api/connection/reconnect dispara NOTIFY reconnect_requested (202) com JWT', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/connection/reconnect',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ ok: true });
+    expect(notify).toHaveBeenCalledWith('reconnect_requested');
+  });
+
+  it('POST /api/connection/reconnect sem JWT retorna 401', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/connection/reconnect' });
+    expect(res.statusCode).toBe(401);
+    expect(notify).not.toHaveBeenCalledWith('reconnect_requested');
+  });
+
   it('POST /api/groups com body malformado retorna 400 (não 500)', async () => {
     const auth = { authorization: `Bearer ${token(app)}` };
 
