@@ -54,5 +54,22 @@ export const detectionsCounter = new Counter({
   registers: [registry],
 });
 
+/**
+ * Mensagens recebidas de grupos MONITORADOS, por grupo e desfecho. Torna visível
+ * a perda silenciosa: `no_text` (formato não mapeado / só-mídia), `no_match`
+ * (texto sem keyword), `dedup` (reenvio colapsado) e `detected`. A razão
+ * detected/total por grupo mede a eficácia das keywords; `no_text` alto sinaliza
+ * um formato de mensagem que o `getMessageText` ainda não extrai.
+ *
+ * Cardinalidade controlada: `group_jid` é uma lista fechada (poucos monitorados) e
+ * `outcome` tem 4 valores fixos. O tipo da mensagem (Object.keys) vai só no log.
+ */
+export const monitoredMessagesCounter = new Counter({
+  name: 'nossoradar_worker_monitored_messages_total',
+  help: 'Mensagens recebidas de grupos monitorados, por grupo e desfecho.',
+  labelNames: ['group_jid', 'outcome'] as const,
+  registers: [registry],
+});
+
 // Estado inicial: desconectado (antes do primeiro connect()).
 setWhatsappConnectionState('disconnected');

@@ -30,8 +30,17 @@ import {
 } from '@whiskeysockets/baileys';
 
 import { env } from './env.js';
-import { detectionsCounter, setWhatsappConnectionState } from './metrics.js';
+import { detectionsCounter, monitoredMessagesCounter, setWhatsappConnectionState } from './metrics.js';
 import { formatDetectionAlert, TelegramNotifier } from './telegram.js';
+
+/** Desfecho de uma mensagem de grupo monitorado (para log + métrica). */
+type MessageOutcome = 'detected' | 'no_text' | 'dedup' | 'no_match';
+
+/** Prévia curta e single-line do texto para logs (privacidade: nunca o corpo todo). */
+function preview(text: string, max = 40): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
 
 interface MonitoredGroup {
   jid: string;
@@ -58,6 +67,12 @@ export class WhatsAppWorker {
   private readonly maxReconnectAttempts = 5;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /**
+   * Throttle do WARN de `no_text`: no máximo 1 log a cada 60s por (jid+tipo de
+   * mensagem), para um grupo que só manda mídia/sticker não inundar o log. A
+   * métrica `monitoredMessagesCounter` NUNCA é throttled — só o log textual.
+   */
+  private readonly noTextLogThrottle = new Map<string, number>();
   /**
    * Lock in-flight de `connect()`: serializa chamadas concorrentes para NUNCA criar
    * dois sockets Baileys simultâneos (ADR-0004). Entre o teardown síncrono e o
@@ -280,10 +295,18 @@ export class WhatsAppWorker {
     if (!jid || !jid.endsWith('@g.us') || !message.message) return;
 
     const monitored = this.monitored.get(jid);
-    if (!monitored) return; // grupo não monitorado
+    if (!monitored) return; // grupo não monitorado (maior volume — silencioso por design)
 
+    // A partir daqui é grupo MONITORADO: TODO desfecho vira métrica + log (antes,
+    // mensagens sem texto extraível ou sem match sumiam sem rastro — bug do IURI).
+    const keys = Object.keys(message.message);
     const text = getMessageText(message.message as unknown as WAMessageContent);
-    if (!text || text.trim().length === 0) return;
+
+    if (!text || text.trim().length === 0) {
+      this.recordOutcome(jid, 'no_text');
+      this.warnNoText(monitored.name, jid, keys, message.key?.id ?? null);
+      return;
+    }
 
     const participant = message.key?.participant
       ? message.key.participant.split('@')[0]
@@ -295,12 +318,24 @@ export class WhatsAppWorker {
 
     const fingerprint = createMessageFingerprint(sender ?? 'desconhecido', text, ts);
     if (fingerprint) {
-      if (this.dedup.has(fingerprint)) return;
+      if (this.dedup.has(fingerprint)) {
+        this.recordOutcome(jid, 'dedup');
+        this.logDebug(
+          `[worker] dedup em "${monitored.name}" [${keys.join('+')}]: "${preview(text)}"`,
+        );
+        return;
+      }
       this.dedup.set(fingerprint, Date.now());
     }
 
     const matched = matchKeywords(text, monitored.keywords);
-    if (matched.length === 0) return;
+    if (matched.length === 0) {
+      this.recordOutcome(jid, 'no_match');
+      this.logDebug(
+        `[worker] sem match em "${monitored.name}" [${keys.join('+')}, ${text.trim().length} chars]: "${preview(text)}"`,
+      );
+      return;
+    }
 
     const detectionId = await insertDetection({
       groupJid: jid,
@@ -311,6 +346,7 @@ export class WhatsAppWorker {
       messageId: message.key?.id ?? null,
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
+    this.recordOutcome(jid, 'detected');
     detectionsCounter.inc({ group_jid: jid });
 
     // `notified_telegram` só vira true quando o envio confirma (onSent). Se o Telegram
@@ -323,13 +359,43 @@ export class WhatsAppWorker {
       },
     );
 
-    console.log(`[worker] detecção em "${monitored.name}": ${matched.join(', ')}`);
+    console.log(`[worker] detecção em "${monitored.name}" [${keys.join('+')}]: ${matched.join(', ')}`);
+  }
+
+  /** Contabiliza o desfecho de uma mensagem de grupo monitorado (Prometheus). */
+  private recordOutcome(jid: string, outcome: MessageOutcome): void {
+    monitoredMessagesCounter.inc({ group_jid: jid, outcome });
+  }
+
+  /**
+   * WARN (throttled) quando uma mensagem de grupo monitorado não rendeu texto:
+   * ou é só-mídia (sticker/áudio), ou é um formato que `getMessageText` ainda não
+   * extrai. O tipo (`Object.keys`) revela qual formato investigar.
+   */
+  private warnNoText(groupName: string, jid: string, keys: string[], messageId: string | null): void {
+    const throttleKey = `${jid}|${keys.join('+')}`;
+    const now = Date.now();
+    const last = this.noTextLogThrottle.get(throttleKey) ?? 0;
+    if (now - last < 60_000) return;
+    this.noTextLogThrottle.set(throttleKey, now);
+    console.warn(
+      `[worker] sem texto extraído em "${groupName}" — tipo=[${keys.join(', ')}] msgId=${messageId ?? 'n/a'}. ` +
+        'Se for oferta, o formato pode não estar mapeado em getMessageText.',
+    );
+  }
+
+  /** Log só quando LOG_LEVEL=debug (ramos de alto volume: no_match/dedup). */
+  private logDebug(msg: string): void {
+    if (env.LOG_LEVEL === 'debug') console.log(msg);
   }
 
   private pruneDedup(): void {
     const cutoff = Date.now() - 60 * 60 * 1000;
     for (const [fingerprint, ts] of this.dedup) {
       if (ts < cutoff) this.dedup.delete(fingerprint);
+    }
+    for (const [key, ts] of this.noTextLogThrottle) {
+      if (ts < cutoff) this.noTextLogThrottle.delete(key);
     }
   }
 }
