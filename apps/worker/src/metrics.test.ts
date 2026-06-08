@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   detectionsCounter,
+  monitoredMessagesCounter,
   registry,
   setWhatsappConnectionState,
   whatsappConnectedGauge,
@@ -27,5 +28,14 @@ describe('métricas do worker', () => {
     detectionsCounter.inc({ group_jid: 'teste@g.us' });
     const text = await registry.metrics();
     expect(text).toMatch(/nossoradar_worker_detections_total\{[^}]*group_jid="teste@g\.us"[^}]*\} 1/);
+  });
+
+  it('expõe o contador de mensagens monitoradas por grupo e desfecho', async () => {
+    monitoredMessagesCounter.inc({ group_jid: 'g1@g.us', outcome: 'no_text' });
+    const text = await registry.metrics();
+    expect(text).toContain('nossoradar_worker_monitored_messages_total');
+    expect(text).toMatch(
+      /nossoradar_worker_monitored_messages_total\{[^}]*group_jid="g1@g\.us"[^}]*outcome="no_text"[^}]*\} 1/,
+    );
   });
 });

@@ -9,6 +9,7 @@ vi.mock('./env.js', () => ({
     TELEGRAM_BOT_TOKEN: '',
     TELEGRAM_CHAT_ID: '',
     WORKER_HEALTH_PORT: 3001,
+    LOG_LEVEL: 'debug',
   },
 }));
 
@@ -32,6 +33,7 @@ vi.mock('@nossoradar/db', () => ({
 
 vi.mock('./metrics.js', () => ({
   detectionsCounter: { inc: vi.fn() },
+  monitoredMessagesCounter: { inc: vi.fn() },
   setWhatsappConnectionState: vi.fn(),
 }));
 
@@ -89,6 +91,8 @@ vi.mock('@whiskeysockets/baileys', () => ({
 }));
 
 const { WhatsAppWorker } = await import('./whatsapp.js');
+const dbMock = await import('@nossoradar/db');
+const metricsMock = await import('./metrics.js');
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
@@ -153,5 +157,121 @@ describe('WhatsAppWorker.connect() — serialização (ADR-0004)', () => {
 
     expect(maxConcurrentLive).toBe(1);
     expect(liveSockets.size).toBe(1);
+  });
+});
+
+describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de texto)', () => {
+  const GROUP_JID = '120363000000000000@g.us';
+
+  // Acesso ao método privado + injeção do grupo monitorado (sem Postgres/Baileys).
+  function newWorkerMonitoring(keywords: string[]): {
+    handle: (msg: unknown) => Promise<void>;
+  } {
+    const worker = new WhatsAppWorker();
+    (worker as unknown as { monitored: Map<string, unknown> }).monitored = new Map([
+      [GROUP_JID, { jid: GROUP_JID, name: 'Grupo Teste', enabled: true, keywords }],
+    ]);
+    return {
+      handle: (msg: unknown) =>
+        (worker as unknown as { handleMessage: (m: unknown) => Promise<void> }).handleMessage(msg),
+    };
+  }
+
+  function groupMsg(content: unknown, id = 'm1', ts = 1000): unknown {
+    return {
+      key: { remoteJid: GROUP_JID, participant: '5511999999999@s.whatsapp.net', id, fromMe: false },
+      message: content,
+      pushName: 'Fulano',
+      messageTimestamp: ts,
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(dbMock.insertDetection).mockClear();
+    vi.mocked(metricsMock.monitoredMessagesCounter.inc).mockClear();
+  });
+
+  it('mensagem efêmera com keyword vira detecção (o caso do IURI)', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    await handle(
+      groupMsg({ ephemeralMessage: { message: { conversation: 'Oferta: Monitor Gamer 27' } } }),
+    );
+
+    expect(dbMock.insertDetection).toHaveBeenCalledTimes(1);
+    expect(dbMock.insertDetection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupJid: GROUP_JID,
+        matchedKeywords: ['monitor'],
+        messageText: 'Oferta: Monitor Gamer 27',
+      }),
+    );
+    expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+      group_jid: GROUP_JID,
+      outcome: 'detected',
+    });
+  });
+
+  it('formato de bot (templateMessage) com keyword vira detecção', async () => {
+    const { handle } = newWorkerMonitoring(['latam']);
+    await handle(
+      groupMsg({
+        templateMessage: { hydratedTemplate: { hydratedContentText: 'Promo LATAM 100% bônus' } },
+      }),
+    );
+    expect(dbMock.insertDetection).toHaveBeenCalledTimes(1);
+  });
+
+  it('mensagem só-mídia (sem texto) NÃO vira detecção e conta como no_text', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    await handle(groupMsg({ imageMessage: {} }));
+
+    expect(dbMock.insertDetection).not.toHaveBeenCalled();
+    expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+      group_jid: GROUP_JID,
+      outcome: 'no_text',
+    });
+  });
+
+  it('texto sem keyword conta como no_match (sem detecção) e loga em debug', async () => {
+    const debugSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const { handle } = newWorkerMonitoring(['monitor']);
+      await handle(groupMsg({ conversation: 'bom dia pessoal' }));
+
+      expect(dbMock.insertDetection).not.toHaveBeenCalled();
+      expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+        group_jid: GROUP_JID,
+        outcome: 'no_match',
+      });
+      // LOG_LEVEL=debug (mock) → logDebug do ramo no_match dispara.
+      expect(debugSpy.mock.calls.some(([m]) => typeof m === 'string' && m.includes('sem match'))).toBe(
+        true,
+      );
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
+  it('reenvio idêntico no mesmo minuto é colapsado (dedup), só 1 detecção', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    await handle(groupMsg({ conversation: 'Monitor 4k' }, 'a', 1000));
+    await handle(groupMsg({ conversation: 'Monitor 4k' }, 'b', 1010));
+
+    expect(dbMock.insertDetection).toHaveBeenCalledTimes(1);
+    expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+      group_jid: GROUP_JID,
+      outcome: 'dedup',
+    });
+  });
+
+  it('grupo não monitorado é ignorado (sem métrica, sem detecção)', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    await handle({
+      key: { remoteJid: '999@g.us', id: 'x', fromMe: false },
+      message: { conversation: 'Monitor barato' },
+      messageTimestamp: 1000,
+    });
+    expect(dbMock.insertDetection).not.toHaveBeenCalled();
+    expect(metricsMock.monitoredMessagesCounter.inc).not.toHaveBeenCalled();
   });
 });
