@@ -34,9 +34,11 @@ describe('getMessageText — folhas básicas', () => {
     expect(getMessageText({ ptvMessage: { caption: 'ptv promo' } })).toBe('ptv promo');
   });
 
-  it('lê legenda/título de documento', () => {
+  it('lê legenda/título de documento (mas NÃO fileName — evita falso positivo)', () => {
     expect(getMessageText({ documentMessage: { caption: 'catálogo' } })).toBe('catálogo');
-    expect(getMessageText({ documentMessage: { title: 'tabela.pdf' } })).toBe('tabela.pdf');
+    expect(getMessageText({ documentMessage: { title: 'tabela' } })).toBe('tabela');
+    // fileName tipo 'oferta_latam.pdf' não é texto humano e não deve casar keyword.
+    expect(getMessageText({ documentMessage: { fileName: 'oferta_latam.pdf' } } as never)).toBeNull();
   });
 
   it('ignora só-espaços e cai para o próximo campo', () => {
@@ -120,6 +122,45 @@ describe('getMessageText — formatos de bot / promo', () => {
     expect(getMessageText({ listMessage: { description: 'lista de ofertas' } })).toBe('lista de ofertas');
   });
 
+  it('lê listMessage sections[].rows[] (itens reais da lista)', () => {
+    expect(
+      getMessageText({
+        listMessage: {
+          title: 'Ofertas',
+          sections: [
+            { title: 'Voos', rows: [{ title: 'LATAM 100%', description: 'bônus' }] },
+          ],
+        },
+      }),
+    ).toBe('Ofertas Voos LATAM 100% bônus');
+  });
+
+  it('lê interactiveMessage nativeFlow (display_text no buttonParamsJson)', () => {
+    expect(
+      getMessageText({
+        interactiveMessage: {
+          nativeFlowMessage: {
+            buttons: [{ buttonParamsJson: '{"display_text":"Ver oferta LATAM"}' }],
+          },
+        },
+      }),
+    ).toBe('Ver oferta LATAM');
+  });
+
+  it('nativeFlow com JSON inválido não quebra (retorna null)', () => {
+    expect(
+      getMessageText({
+        interactiveMessage: { nativeFlowMessage: { buttons: [{ buttonParamsJson: '{nao-e-json' }] } },
+      }),
+    ).toBeNull();
+  });
+
+  it('lê buttonsMessage com header de mídia (caption da imagem)', () => {
+    expect(
+      getMessageText({ buttonsMessage: { imageMessage: { caption: 'promo na imagem' } } }),
+    ).toBe('promo na imagem');
+  });
+
   it('lê productMessage (título do produto)', () => {
     expect(
       getMessageText({ productMessage: { product: { title: 'Monitor Gamer 27' } } }),
@@ -147,25 +188,33 @@ describe('getMessageText — formatos de bot / promo', () => {
   });
 });
 
-describe('getMessageText — mensagem citada (quoted)', () => {
-  it('recursa em quotedMessage no topo (paridade com legado)', () => {
-    expect(getMessageText({ quotedMessage: { conversation: 'citada' } })).toBe('citada');
-  });
+describe('getMessageText — mensagem citada (quoted): NÃO é fonte de texto', () => {
+  // Decisão (revisão PR #13): citar uma oferta não é repostá-la. Usar o quoted como
+  // única fonte gerava detecção duplicada com sender/timestamp errados (B2).
 
-  it('recursa no quoted real (extendedTextMessage.contextInfo.quotedMessage)', () => {
+  it('resposta SEM texto próprio citando oferta antiga retorna null (não duplica detecção)', () => {
     expect(
       getMessageText({
-        extendedTextMessage: { contextInfo: { quotedMessage: { conversation: 'original citada' } } },
-      }),
-    ).toBe('original citada');
+        imageMessage: { contextInfo: { quotedMessage: { conversation: 'LATAM 100% bônus' } } },
+      } as never),
+    ).toBeNull();
   });
 
-  it('prefere o texto direto ao quoted', () => {
+  it('considera só o texto PRÓPRIO da resposta, ignorando o quoted', () => {
     expect(
       getMessageText({
-        extendedTextMessage: { text: 'resposta', contextInfo: { quotedMessage: { conversation: 'antiga' } } },
-      }),
-    ).toBe('resposta');
+        extendedTextMessage: {
+          text: 'ainda vale?',
+          contextInfo: { quotedMessage: { conversation: 'LATAM 100% bônus' } },
+        },
+      } as never),
+    ).toBe('ainda vale?');
+  });
+
+  it('quoted auto-referente (cíclico) não estoura a pilha — retorna null', () => {
+    const c: Record<string, unknown> = {};
+    c.extendedTextMessage = { contextInfo: { quotedMessage: c } };
+    expect(getMessageText(c as never)).toBeNull();
   });
 });
 

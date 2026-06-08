@@ -1,3 +1,8 @@
+// NOTA ARQUITETURAL: o core é deliberadamente SEM dependência do @whiskeysockets/baileys
+// (devDeps só vitest/types). O Baileys até exporta `extractMessageContent`/`getContentType`,
+// mas adotá-los aqui acoplaria o domínio à lib de transporte e comprometeria a testabilidade.
+// Por isso os tipos `WAMessageContent` e o desembrulho de envelopes são mantidos à mão.
+
 const DIACRITICS = /[̀-ͯ]/g;
 
 /**
@@ -11,21 +16,15 @@ export function normalizeText(text: string): string {
 
 // ---------------------------------------------------------------------------
 // Tipos: subconjunto do proto.IMessage do Baileys de que precisamos para extrair
-// texto humano legível. Mantido manualmente (sem depender de @whiskeysockets/baileys
-// no core) e propositalmente permissivo — campos opcionais/anuláveis.
+// texto humano legível. Propositalmente permissivo — campos opcionais/anuláveis.
 // ---------------------------------------------------------------------------
 
 interface WAFutureProof {
   message?: WAMessageContent | null;
 }
 
-interface WAContextInfo {
-  quotedMessage?: WAMessageContent | null;
-}
-
 interface WAMediaLeaf {
   caption?: string | null;
-  contextInfo?: WAContextInfo | null;
 }
 
 interface WAHydratedTemplate {
@@ -40,10 +39,36 @@ interface WATemplateMessage {
   interactiveMessageTemplate?: WAInteractiveMessage | null;
 }
 
+interface WANativeFlow {
+  buttons?: Array<{ buttonParamsJson?: string | null } | null> | null;
+}
+
 interface WAInteractiveMessage {
   body?: { text?: string | null } | null;
   header?: { title?: string | null; subtitle?: string | null } | null;
   footer?: { text?: string | null } | null;
+  nativeFlowMessage?: WANativeFlow | null;
+  carouselMessage?: { cards?: Array<WAInteractiveMessage | null> | null } | null;
+}
+
+interface WAListSection {
+  title?: string | null;
+  rows?: Array<{ title?: string | null; description?: string | null } | null> | null;
+}
+
+interface WAListMessage {
+  title?: string | null;
+  description?: string | null;
+  sections?: Array<WAListSection | null> | null;
+}
+
+interface WAButtonsMessage {
+  contentText?: string | null;
+  footerText?: string | null;
+  text?: string | null;
+  imageMessage?: WAMediaLeaf | null;
+  videoMessage?: WAMediaLeaf | null;
+  documentMessage?: WAMediaLeaf | null;
 }
 
 interface WAPoll {
@@ -55,24 +80,20 @@ interface WAPoll {
 export interface WAMessageContent {
   // --- folhas de texto direto ---
   conversation?: string | null;
-  extendedTextMessage?: { text?: string | null; contextInfo?: WAContextInfo | null } | null;
+  extendedTextMessage?: { text?: string | null } | null;
   imageMessage?: WAMediaLeaf | null;
   videoMessage?: WAMediaLeaf | null;
   ptvMessage?: WAMediaLeaf | null;
-  documentMessage?:
-    | (WAMediaLeaf & { title?: string | null; fileName?: string | null })
-    | null;
+  documentMessage?: (WAMediaLeaf & { title?: string | null }) | null;
 
   // --- formatos de bot / promo ---
   templateMessage?: WATemplateMessage | null;
   highlyStructuredMessage?: { hydratedHsm?: WATemplateMessage | null } | null;
-  interactiveMessage?: (WAInteractiveMessage & { contextInfo?: WAContextInfo | null }) | null;
+  interactiveMessage?: WAInteractiveMessage | null;
   interactiveResponseMessage?: { body?: { text?: string | null } | null } | null;
-  buttonsMessage?:
-    | { contentText?: string | null; footerText?: string | null; text?: string | null; contextInfo?: WAContextInfo | null }
-    | null;
+  buttonsMessage?: WAButtonsMessage | null;
   buttonsResponseMessage?: { selectedDisplayText?: string | null } | null;
-  listMessage?: { title?: string | null; description?: string | null } | null;
+  listMessage?: WAListMessage | null;
   listResponseMessage?: { title?: string | null; description?: string | null } | null;
   templateButtonReplyMessage?: { selectedDisplayText?: string | null } | null;
   productMessage?:
@@ -84,9 +105,6 @@ export interface WAMessageContent {
   pollCreationMessageV5?: WAPoll | null;
   groupInviteMessage?: { caption?: string | null; groupName?: string | null } | null;
   eventMessage?: { name?: string | null; description?: string | null } | null;
-
-  // --- mensagem citada no topo (paridade com o legado/teste) ---
-  quotedMessage?: WAMessageContent | null;
 
   // --- envelopes (desembrulhados recursivamente) ---
   ephemeralMessage?: WAFutureProof | null;
@@ -102,6 +120,7 @@ export interface WAMessageContent {
   groupStatusMentionMessage?: WAFutureProof | null;
   associatedChildMessage?: WAFutureProof | null;
   questionMessage?: WAFutureProof | null;
+  // protocolMessage.editedMessage é proto.IMessage DIRETO (não IFutureProofMessage).
   protocolMessage?: { editedMessage?: WAMessageContent | null } | null;
 }
 
@@ -115,11 +134,19 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string | nu
   return null;
 }
 
+/** Junta partes não-vazias num único texto (para listas/enquetes/carrossel). */
+function joinNonEmpty(parts: Array<string | null | undefined>): string | null {
+  const kept = parts.filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+  const joined = kept.join(' ').trim();
+  return joined.length > 0 ? joined : null;
+}
+
 /**
  * Desembrulha os envelopes do Baileys (mensagem temporária, view-once, editada,
  * encaminhada por bot, etc.) até chegar no conteúdo real. Muitos grupos têm modo
  * efêmero ligado: a oferta vem SEMPRE dentro de `ephemeralMessage` — sem isto, o
- * texto nunca era extraído e a detecção falhava silenciosamente.
+ * texto nunca era extraído e a detecção falhava silenciosamente. Guarda de
+ * profundidade protege contra envelope cíclico/adversarial (não recorre — itera).
  */
 function unwrapEnvelopes(content: WAMessageContent): WAMessageContent {
   let current = content;
@@ -146,8 +173,44 @@ function unwrapEnvelopes(content: WAMessageContent): WAMessageContent {
   return current;
 }
 
+/** Texto humano de uma nativeFlow (carrossel/CTA): `display_text` no buttonParamsJson. */
+function extractNativeFlow(flow: WANativeFlow | null | undefined): string | null {
+  const texts: string[] = [];
+  for (const button of flow?.buttons ?? []) {
+    const raw = button?.buttonParamsJson;
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const dt = parsed.display_text ?? parsed.title ?? parsed.text;
+      if (typeof dt === 'string' && dt.trim().length > 0) texts.push(dt);
+    } catch {
+      /* JSON inválido — ignora este botão */
+    }
+  }
+  return joinNonEmpty(texts);
+}
+
+function extractInteractiveDirect(im: WAInteractiveMessage): string | null {
+  return firstNonEmpty(
+    im.body?.text,
+    im.header?.title,
+    im.header?.subtitle,
+    im.footer?.text,
+    extractNativeFlow(im.nativeFlowMessage),
+  );
+}
+
 function extractInteractive(im: WAInteractiveMessage): string | null {
-  return firstNonEmpty(im.body?.text, im.header?.title, im.header?.subtitle, im.footer?.text);
+  const main = extractInteractiveDirect(im);
+  if (main) return main;
+  // Carrossel: cada card é uma interactive; varre um nível (não recursa em carrossel
+  // aninhado — protobuf do fio é acíclico, mas mantemos sem recursão por segurança).
+  for (const card of im.carouselMessage?.cards ?? []) {
+    if (!card) continue;
+    const t = extractInteractiveDirect(card);
+    if (t) return t;
+  }
+  return null;
 }
 
 function extractTemplate(tpl: WATemplateMessage): string | null {
@@ -162,8 +225,37 @@ function extractTemplate(tpl: WATemplateMessage): string | null {
   return null;
 }
 
-/** Extrai o texto de uma mensagem JÁ desembrulhada (folha), sem recursão de envelope. */
-function extractLeaf(c: WAMessageContent): string | null {
+function extractList(lm: WAListMessage): string | null {
+  const parts: Array<string | null | undefined> = [lm.title, lm.description];
+  for (const section of lm.sections ?? []) {
+    parts.push(section?.title);
+    for (const row of section?.rows ?? []) {
+      parts.push(row?.title, row?.description);
+    }
+  }
+  return joinNonEmpty(parts);
+}
+
+/**
+ * Extrai o texto humano legível de uma mensagem do WhatsApp (Baileys).
+ *
+ * Estratégia: (1) desembrulha envelopes recursivamente (efêmera, view-once,
+ * editada, device-sent, encaminhada por bot…); (2) extrai a folha — texto direto,
+ * legendas de mídia e formatos de bot/promo (template/interactive/nativeFlow/
+ * buttons/list/produto/enquete).
+ *
+ * NÃO extrai texto de mensagem citada (quoted): citar uma oferta não é repostá-la,
+ * e usar o quoted como única fonte gerava detecção duplicada com sender/timestamp
+ * errados (a resposta, não a oferta original). A detecção considera só o texto
+ * próprio da mensagem.
+ *
+ * Retorna `null` quando não há texto humano (áudio, sticker, localização, etc.) —
+ * o chamador (worker) registra esse caso (`no_text`) para observabilidade.
+ */
+export function getMessageText(content: WAMessageContent | null | undefined): string | null {
+  if (!content) return null;
+  const c = unwrapEnvelopes(content);
+
   // Texto direto e legendas de mídia (casos mais comuns).
   const direct = firstNonEmpty(
     c.conversation,
@@ -173,11 +265,10 @@ function extractLeaf(c: WAMessageContent): string | null {
     c.ptvMessage?.caption,
     c.documentMessage?.caption,
     c.documentMessage?.title,
-    c.documentMessage?.fileName,
   );
   if (direct) return direct;
 
-  // Formatos de bot / promo (template, interactive, buttons, list, produto, enquete…).
+  // Formatos de bot / promo.
   if (c.templateMessage) {
     const t = extractTemplate(c.templateMessage);
     if (t) return t;
@@ -193,17 +284,24 @@ function extractLeaf(c: WAMessageContent): string | null {
   const interactiveResp = firstNonEmpty(c.interactiveResponseMessage?.body?.text);
   if (interactiveResp) return interactiveResp;
 
-  const buttons = firstNonEmpty(
-    c.buttonsMessage?.contentText,
-    c.buttonsMessage?.text,
-    c.buttonsMessage?.footerText,
-  );
-  if (buttons) return buttons;
+  if (c.buttonsMessage) {
+    const buttons = firstNonEmpty(
+      c.buttonsMessage.contentText,
+      c.buttonsMessage.text,
+      c.buttonsMessage.footerText,
+      c.buttonsMessage.imageMessage?.caption,
+      c.buttonsMessage.videoMessage?.caption,
+      c.buttonsMessage.documentMessage?.caption,
+    );
+    if (buttons) return buttons;
+  }
   const buttonsResp = firstNonEmpty(c.buttonsResponseMessage?.selectedDisplayText);
   if (buttonsResp) return buttonsResp;
 
-  const list = firstNonEmpty(c.listMessage?.title, c.listMessage?.description);
-  if (list) return list;
+  if (c.listMessage) {
+    const list = extractList(c.listMessage);
+    if (list) return list;
+  }
   const listResp = firstNonEmpty(c.listResponseMessage?.title, c.listResponseMessage?.description);
   if (listResp) return listResp;
   const tplReply = firstNonEmpty(c.templateButtonReplyMessage?.selectedDisplayText);
@@ -218,55 +316,15 @@ function extractLeaf(c: WAMessageContent): string | null {
 
   const poll = c.pollCreationMessage ?? c.pollCreationMessageV2 ?? c.pollCreationMessageV3 ?? c.pollCreationMessageV5;
   if (poll) {
-    const options = (poll.options ?? [])
-      .map((o) => o?.optionName)
-      .filter((o): o is string => typeof o === 'string' && o.trim().length > 0);
-    const pollText = [poll.name, ...options].filter(Boolean).join(' ').trim();
-    if (pollText.length > 0) return pollText;
+    const options = (poll.options ?? []).map((o) => o?.optionName);
+    const pollText = joinNonEmpty([poll.name, ...options]);
+    if (pollText) return pollText;
   }
 
   const invite = firstNonEmpty(c.groupInviteMessage?.caption, c.groupInviteMessage?.groupName);
   if (invite) return invite;
   const event = firstNonEmpty(c.eventMessage?.name, c.eventMessage?.description);
   if (event) return event;
-
-  return null;
-}
-
-/** Caminhos onde uma mensagem citada (quoted) pode estar no Baileys real. */
-function findQuoted(c: WAMessageContent): WAMessageContent | null {
-  return (
-    c.extendedTextMessage?.contextInfo?.quotedMessage ??
-    c.imageMessage?.contextInfo?.quotedMessage ??
-    c.videoMessage?.contextInfo?.quotedMessage ??
-    c.documentMessage?.contextInfo?.quotedMessage ??
-    c.buttonsMessage?.contextInfo?.quotedMessage ??
-    c.interactiveMessage?.contextInfo?.quotedMessage ??
-    c.quotedMessage ?? // paridade com o legado (quoted no topo)
-    null
-  );
-}
-
-/**
- * Extrai o texto humano legível de uma mensagem do WhatsApp (Baileys).
- *
- * Estratégia: (1) desembrulha envelopes recursivamente (efêmera, view-once,
- * editada, device-sent, encaminhada por bot…); (2) extrai a folha — texto direto,
- * legendas de mídia e formatos de bot/promo (template/interactive/buttons/list/
- * produto/enquete); (3) como último recurso, recursa na mensagem citada (quoted).
- *
- * Retorna `null` quando não há texto humano (áudio, sticker, localização, etc.) —
- * o chamador (worker) registra esse caso (`no_text`) para observabilidade.
- */
-export function getMessageText(content: WAMessageContent | null | undefined): string | null {
-  if (!content) return null;
-  const unwrapped = unwrapEnvelopes(content);
-
-  const direct = extractLeaf(unwrapped);
-  if (direct) return direct;
-
-  const quoted = findQuoted(unwrapped);
-  if (quoted) return getMessageText(quoted);
 
   return null;
 }

@@ -9,6 +9,7 @@ vi.mock('./env.js', () => ({
     TELEGRAM_BOT_TOKEN: '',
     TELEGRAM_CHAT_ID: '',
     WORKER_HEALTH_PORT: 3001,
+    LOG_LEVEL: 'debug',
   },
 }));
 
@@ -231,15 +232,24 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
     });
   });
 
-  it('texto sem keyword conta como no_match (sem detecção)', async () => {
-    const { handle } = newWorkerMonitoring(['monitor']);
-    await handle(groupMsg({ conversation: 'bom dia pessoal' }));
+  it('texto sem keyword conta como no_match (sem detecção) e loga em debug', async () => {
+    const debugSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const { handle } = newWorkerMonitoring(['monitor']);
+      await handle(groupMsg({ conversation: 'bom dia pessoal' }));
 
-    expect(dbMock.insertDetection).not.toHaveBeenCalled();
-    expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
-      group_jid: GROUP_JID,
-      outcome: 'no_match',
-    });
+      expect(dbMock.insertDetection).not.toHaveBeenCalled();
+      expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+        group_jid: GROUP_JID,
+        outcome: 'no_match',
+      });
+      // LOG_LEVEL=debug (mock) → logDebug do ramo no_match dispara.
+      expect(debugSpy.mock.calls.some(([m]) => typeof m === 'string' && m.includes('sem match'))).toBe(
+        true,
+      );
+    } finally {
+      debugSpy.mockRestore();
+    }
   });
 
   it('reenvio idêntico no mesmo minuto é colapsado (dedup), só 1 detecção', async () => {
