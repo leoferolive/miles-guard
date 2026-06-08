@@ -155,6 +155,18 @@ describe('getMessageText — formatos de bot / promo', () => {
     ).toBeNull();
   });
 
+  it('nativeFlow com display_text vazio cai para title (não mascara)', () => {
+    expect(
+      getMessageText({
+        interactiveMessage: {
+          nativeFlowMessage: {
+            buttons: [{ buttonParamsJson: '{"display_text":"","title":"PROMO LATAM 100%"}' }],
+          },
+        },
+      }),
+    ).toBe('PROMO LATAM 100%');
+  });
+
   it('lê buttonsMessage com header de mídia (caption da imagem)', () => {
     expect(
       getMessageText({ buttonsMessage: { imageMessage: { caption: 'promo na imagem' } } }),

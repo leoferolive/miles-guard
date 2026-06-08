@@ -181,8 +181,13 @@ function extractNativeFlow(flow: WANativeFlow | null | undefined): string | null
     if (!raw) continue;
     try {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const dt = parsed.display_text ?? parsed.title ?? parsed.text;
-      if (typeof dt === 'string' && dt.trim().length > 0) texts.push(dt);
+      // Primeiro candidato não-vazio (display_text vazio não deve mascarar title/text).
+      const dt = firstNonEmpty(
+        typeof parsed.display_text === 'string' ? parsed.display_text : null,
+        typeof parsed.title === 'string' ? parsed.title : null,
+        typeof parsed.text === 'string' ? parsed.text : null,
+      );
+      if (dt) texts.push(dt);
     } catch {
       /* JSON inválido — ignora este botão */
     }
