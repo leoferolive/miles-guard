@@ -14,7 +14,7 @@
     "@nossoradar/core": "workspace:*",
     "@nossoradar/db": "workspace:*",
     "@nossoradar/shared": "workspace:*",
-    "@whiskeysockets/baileys": "^6.7.19",
+    "@whiskeysockets/baileys": "7.0.0-rc13",
     "dotenv": "^16.4.7",
     "prom-client": "^15.1.3"
   },
