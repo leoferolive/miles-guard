@@ -3,6 +3,7 @@ import { env } from './env.js';
 interface QueueItem {
   text: string;
   onSent?: () => void;
+  attempts?: number;
 }
 
 export interface DetectionAlert {
@@ -34,6 +35,7 @@ export class TelegramNotifier {
   private readonly enabled: boolean;
   private readonly queue: QueueItem[] = [];
   private readonly maxQueue = 500;
+  private readonly maxAttempts = 5;
   private readonly intervalMs: number;
   private lastSent = 0;
   private running = false;
@@ -77,7 +79,22 @@ export class TelegramNotifier {
       if (wait > 0) await delay(wait);
       const ok = await this.send(item.text);
       this.lastSent = Date.now();
-      if (ok) item.onSent?.();
+      if (ok) {
+        item.onSent?.();
+      } else {
+        // Falha transitória (rede/429/5xx): reenfileira no FIM (deixa outros alertas
+        // passarem; o rate-limit entre envios já serve de backoff) até o teto. Sem
+        // isto, uma detecção gravada no DB ficava para sempre sem alerta no Telegram.
+        const attempts = (item.attempts ?? 0) + 1;
+        if (attempts < this.maxAttempts) {
+          this.queue.push({ ...item, attempts });
+          console.warn(`[telegram] reentregando alerta (tentativa ${attempts}/${this.maxAttempts}).`);
+        } else {
+          console.error(
+            `[telegram] alerta NÃO entregue após ${this.maxAttempts} tentativas — desistindo.`,
+          );
+        }
+      }
     }
   }
 
