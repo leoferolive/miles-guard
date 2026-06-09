@@ -132,6 +132,10 @@ export class WhatsAppWorker {
       auth: state,
       defaultQueryTimeoutMs: 60_000,
       keepAliveIntervalMs: 30_000,
+      // Monitor headless: não sinalizar "foreground/online" ao WhatsApp. Marcar-se
+      // online pode empurrar entrega para push e reduzir o buffer offline que nos
+      // reentrega mensagens após cada reconexão (flapping 503). Queremos o contrário.
+      markOnlineOnConnect: false,
     });
     this.sock = sock;
 

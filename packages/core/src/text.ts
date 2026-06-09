@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // NOTA ARQUITETURAL: o core é deliberadamente SEM dependência do @whiskeysockets/baileys
 // (devDeps só vitest/types). O Baileys até exporta `extractMessageContent`/`getContentType`,
 // mas adotá-los aqui acoplaria o domínio à lib de transporte e comprometeria a testabilidade.
@@ -335,8 +337,16 @@ export function getMessageText(content: WAMessageContent | null | undefined): st
 }
 
 /**
- * Fingerprint para deduplicação (portado): sender + texto + minuto, em base64.
- * Agrupa por minuto para colapsar reenvios quase simultâneos.
+ * Fingerprint para deduplicação: hash de (sender + texto + minuto). Agrupa por
+ * minuto para colapsar reenvios quase simultâneos do MESMO conteúdo.
+ *
+ * Usa SHA-1 do conteúdo INTEIRO (antes era `base64(content).slice(0,24)`, que
+ * guardava só ~18 bytes do texto cru — com nome de canal + emoji + palavras
+ * comuns no prefixo, ofertas DIFERENTES do mesmo canal no mesmo minuto colidiam
+ * e a segunda era descartada como duplicata, perdendo o alerta). O hash faz o
+ * texto inteiro contribuir, então só conteúdo idêntico colide. Normaliza o texto
+ * (mesma base do matchKeywords) para reenvios que diferem só em acento/caixa
+ * também colapsarem.
  */
 export function createMessageFingerprint(
   sender: string,
@@ -344,7 +354,6 @@ export function createMessageFingerprint(
   timestampSeconds: number,
 ): string | null {
   if (!text) return null;
-  const content = `${sender}-${text}-${Math.floor(timestampSeconds / 60)}`;
-  const base64 = Buffer.from(content).toString('base64');
-  return base64.substring(0, Math.min(24, base64.length));
+  const content = `${sender}-${normalizeText(text)}-${Math.floor(timestampSeconds / 60)}`;
+  return createHash('sha1').update(content).digest('base64').substring(0, 24);
 }

@@ -248,4 +248,23 @@ describe('createMessageFingerprint', () => {
   it('retorna null sem texto', () => {
     expect(createMessageFingerprint('joao', '', 1000)).toBeNull();
   });
+
+  it('ofertas DIFERENTES do mesmo canal no mesmo minuto NÃO colidem (regressão dedup)', () => {
+    // Bug: o fingerprint antigo guardava só ~18 bytes do texto cru; com prefixo de
+    // canal+emoji iguais, ofertas distintas colidiam e a 2ª virava "duplicata".
+    const sender = 'Ofcpromo Ofertas';
+    const a = createMessageFingerprint(sender, '🛍 Passagem LATAM SP→Lisboa 90k milhas ida/volta', 1000);
+    const b = createMessageFingerprint(sender, '🛍 Passagem LATAM SP→Madri 120k milhas ida/volta', 1000);
+    expect(a).not.toBe(b);
+  });
+
+  it('mesmo conteúdo com acento/caixa diferente colapsa (normalizado)', () => {
+    const a = createMessageFingerprint('ana', 'Promoção LATAM', 1000);
+    const b = createMessageFingerprint('ana', 'promocao latam', 1000);
+    expect(a).toBe(b);
+  });
+
+  it('o fingerprint tem 24 chars (hash, não prefixo do texto)', () => {
+    expect(createMessageFingerprint('joao', 'oferta', 1000)).toHaveLength(24);
+  });
 });
