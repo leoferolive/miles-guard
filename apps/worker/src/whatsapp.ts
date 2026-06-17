@@ -1,4 +1,5 @@
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
   createMessageFingerprint,
@@ -214,8 +215,10 @@ export class WhatsAppWorker {
   }
 
   private async clearSession(): Promise<void> {
-    await rm(env.WA_SESSION_PATH, { recursive: true, force: true });
-    await mkdir(env.WA_SESSION_PATH, { recursive: true });
+    const entries = await readdir(env.WA_SESSION_PATH);
+    await Promise.all(
+      entries.map((entry) => rm(join(env.WA_SESSION_PATH, entry), { recursive: true, force: true })),
+    );
   }
 
   private async onConnectionUpdate(update: BaileysEventMap['connection.update']): Promise<void> {
