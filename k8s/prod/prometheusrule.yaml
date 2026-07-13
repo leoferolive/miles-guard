@@ -30,7 +30,7 @@ spec:
           # O target do worker sumiu do scrape (pod morto/CrashLoop ou /metrics
           # inacessível) — não dá pra confiar no gauge acima, então alerta à parte.
           expr: absent(nossoradar_worker_whatsapp_connected{namespace="nossoradar"})
-          for: 5m
+          for: 10m
           labels:
             severity: critical
             namespace: nossoradar
