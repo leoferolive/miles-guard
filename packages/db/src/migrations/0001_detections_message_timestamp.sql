@@ -1,0 +1,1 @@
+ALTER TABLE "detections" ADD COLUMN "message_timestamp" timestamp with time zone;

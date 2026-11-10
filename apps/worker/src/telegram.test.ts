@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { formatDetectionAlert, TelegramNotifier } from './telegram.js';
+import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
 
 describe('formatDetectionAlert', () => {
   it('monta o alerta com grupo, keywords e corpo', () => {
@@ -14,6 +14,18 @@ describe('formatDetectionAlert', () => {
     expect(out).toContain('IURI');
     expect(out).toContain('#Monitor');
     expect(out).toContain('Monitor Gamer 27');
+  });
+});
+
+describe('formatAlertTime', () => {
+  it('formata em horário de Brasília com data, independente do fuso do processo', () => {
+    // 19:11:50 UTC = 16:11:50 em America/Sao_Paulo (UTC-3, sem horário de verão).
+    expect(formatAlertTime(new Date('2026-11-10T19:11:50Z'))).toBe('10/11 16:11:50');
+  });
+
+  it('mostra o dia de Brasília quando a virada de dia em UTC ainda não ocorreu lá', () => {
+    // 02:30 UTC do dia 11 ainda é 23:30 do dia 10 em Brasília.
+    expect(formatAlertTime(new Date('2026-11-11T02:30:00Z'))).toBe('10/11 23:30:00');
   });
 });
 

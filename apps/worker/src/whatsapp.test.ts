@@ -38,6 +38,7 @@ vi.mock('./metrics.js', () => ({
 }));
 
 vi.mock('./telegram.js', () => ({
+  formatAlertTime: vi.fn(() => '10/11 16:11:50'),
   formatDetectionAlert: vi.fn(() => 'msg'),
   TelegramNotifier: class {
     enqueue = vi.fn();
@@ -209,6 +210,26 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
       group_jid: GROUP_JID,
       outcome: 'detected',
     });
+  });
+
+  it('grava o horário original da mensagem (messageTimestamp) na detecção', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    await handle(groupMsg({ conversation: 'Monitor barato' }, 'm-ts', 1_762_801_910));
+
+    expect(dbMock.insertDetection).toHaveBeenCalledWith(
+      expect.objectContaining({ messageTimestamp: new Date(1_762_801_910 * 1000) }),
+    );
+  });
+
+  it('sem messageTimestamp, grava messageTimestamp null (não inventa horário)', async () => {
+    const { handle } = newWorkerMonitoring(['monitor']);
+    const msg = groupMsg({ conversation: 'Monitor sem ts' }, 'm-no-ts') as Record<string, unknown>;
+    delete msg.messageTimestamp;
+    await handle(msg);
+
+    expect(dbMock.insertDetection).toHaveBeenCalledWith(
+      expect.objectContaining({ messageTimestamp: null }),
+    );
   });
 
   it('formato de bot (templateMessage) com keyword vira detecção', async () => {

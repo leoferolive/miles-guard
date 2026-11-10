@@ -32,7 +32,7 @@ import {
 
 import { env } from './env.js';
 import { detectionsCounter, monitoredMessagesCounter, setWhatsappConnectionState } from './metrics.js';
-import { formatDetectionAlert, TelegramNotifier } from './telegram.js';
+import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
 
 /** Desfecho de uma mensagem de grupo monitorado (para log + métrica). */
 type MessageOutcome = 'detected' | 'no_text' | 'dedup' | 'no_match';
@@ -322,6 +322,9 @@ export class WhatsAppWorker {
 
     const tsRaw = message.messageTimestamp;
     const ts = tsRaw ? Number(tsRaw.toString()) : Math.floor(Date.now() / 1000);
+    // Horário em que a mensagem foi postada (null se o WhatsApp não informou) — permite
+    // medir o atraso real entre a postagem e a detecção (detected_at).
+    const messageTimestamp = tsRaw ? new Date(ts * 1000) : null;
 
     const fingerprint = createMessageFingerprint(sender ?? 'desconhecido', text, ts);
     if (fingerprint) {
@@ -351,6 +354,7 @@ export class WhatsAppWorker {
       messageText: text,
       matchedKeywords: matched,
       messageId: message.key?.id ?? null,
+      messageTimestamp,
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
     this.recordOutcome(jid, 'detected');
@@ -358,7 +362,7 @@ export class WhatsAppWorker {
 
     // `notified_telegram` só vira true quando o envio confirma (onSent). Se o Telegram
     // estiver desabilitado, fica false (= não confirmado), por design.
-    const time = new Date(ts * 1000).toLocaleTimeString('pt-BR');
+    const time = formatAlertTime(new Date(ts * 1000));
     this.telegram.enqueue(
       formatDetectionAlert({ groupName: monitored.name, sender, text, matchedKeywords: matched, time }),
       () => {
