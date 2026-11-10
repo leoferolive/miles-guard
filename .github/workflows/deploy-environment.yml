@@ -296,10 +296,13 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -euo pipefail
-          # Aplica tudo do ambiente exceto o secret.template.yaml (modelo, nao real).
+          # Aplica tudo do ambiente exceto o secret.template.yaml (modelo, nao real) e os
+          # *-deployment.yaml: estes fixam :latest/:dev e disparariam o rollout do worker
+          # junto com a migration. Sao aplicados no passo seguinte, com a imagem da tag e
+          # na ordem certa (web -> worker).
           for f in ./k8s/"${ENVIRONMENT}"/*.yaml; do
             case "$f" in
-              *secret.template.yaml) echo "skip $f" ;;
+              *secret.template.yaml|*-deployment.yaml) echo "skip $f" ;;
               *) kubectl apply -f "$f" ;;
             esac
           done
@@ -320,15 +323,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          kubectl set image "deployment/${WORKER_DEPLOYMENT}" \
-            "${WORKER_CONTAINER}=${WORKER_IMAGE_URI}" \
-            -n "$NAMESPACE"
-
-          kubectl set image "deployment/${WEB_DEPLOYMENT}" \
-            "${WEB_CONTAINER}=${WEB_IMAGE_URI}" \
-            -n "$NAMESPACE"
-
-          for d in "$WORKER_DEPLOYMENT" "$WEB_DEPLOYMENT"; do
+          # Ordem importa: o web primeiro, porque o initContainer dele roda as migrations.
+          # Só depois que o rollout do web conclui (schema migrado) o worker novo sobe —
+          # senão ele poderia gravar detecções numa coluna que ainda não existe.
+          # O manifest é aplicado já com a imagem da tag (nunca :latest), então o rollout
+          # do worker só começa aqui.
+          update_deployment() {
+            local manifest="$1" d="$2" container="$3" image="$4"
+            sed -E "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/leoferolive/nossoradar-.*#\1${image}#" \
+              "$manifest" | kubectl apply -f -
+            kubectl set image "deployment/${d}" "${container}=${image}" -n "$NAMESPACE"
             kubectl set env "deployment/${d}" \
               APP_VERSION="${TAG}" \
               APP_GIT_TAG="${TAG}" \
@@ -336,14 +340,20 @@ jobs:
               APP_BUILD_TIME="${BUILD_TIME}" \
               APP_ENVIRONMENT="${ENVIRONMENT}" \
               -n "$NAMESPACE"
-
             kubectl annotate "deployment/${d}" \
               "deploy.nossoradar/tag=${TAG}" \
               "deploy.nossoradar/sha=${RESOLVED_SHA}" \
               "deploy.nossoradar/build-time=${BUILD_TIME}" \
               --overwrite \
               -n "$NAMESPACE"
-          done
+          }
+
+          update_deployment "./k8s/${ENVIRONMENT}/web-deployment.yaml" \
+            "$WEB_DEPLOYMENT" "$WEB_CONTAINER" "$WEB_IMAGE_URI"
+          kubectl rollout status "deployment/${WEB_DEPLOYMENT}" -n "$NAMESPACE" --timeout=300s
+
+          update_deployment "./k8s/${ENVIRONMENT}/worker-deployment.yaml" \
+            "$WORKER_DEPLOYMENT" "$WORKER_CONTAINER" "$WORKER_IMAGE_URI"
 
       - name: Wait for rollouts
         env:

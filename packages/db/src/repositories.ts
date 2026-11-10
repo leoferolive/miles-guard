@@ -352,6 +352,8 @@ export interface DetectionInput {
   messageText: string;
   matchedKeywords: string[];
   messageId: string | null;
+  /** Horário original da mensagem no WhatsApp (null se ausente). */
+  messageTimestamp: Date | null;
 }
 
 export async function insertDetection(input: DetectionInput): Promise<string> {

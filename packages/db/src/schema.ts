@@ -69,6 +69,8 @@ export const detections = pgTable(
     messageText: text('message_text').notNull(),
     matchedKeywords: text('matched_keywords').array().notNull(),
     messageId: text('message_id'),
+    /** Horário em que a mensagem foi postada no WhatsApp (messageTimestamp do Baileys). */
+    messageTimestamp: timestamp('message_timestamp', { withTimezone: true }),
     detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
     notifiedTelegram: boolean('notified_telegram').notNull().default(false),
   },

@@ -14,6 +14,27 @@ export interface DetectionAlert {
   time: string;
 }
 
+const ALERT_TIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+/**
+ * Data/hora do alerta em horário de Brasília ("10/11 16:11:50"). O fuso é explícito:
+ * o container roda em UTC, e sem ele o alerta mostrava a hora 3h adiantada.
+ */
+export function formatAlertTime(date: Date): string {
+  const p = Object.fromEntries(
+    ALERT_TIME_FORMAT.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return `${p.day}/${p.month} ${p.hour}:${p.minute}:${p.second}`;
+}
+
 /** Formata o Alerta de Detecção (portado de telegram.service.formatIndividualMessage). */
 export function formatDetectionAlert(alert: DetectionAlert): string {
   const tags = alert.matchedKeywords.map((k) => `#${k.replace(/\s+/g, '_')}`).join(' ');
