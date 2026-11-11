@@ -22,6 +22,15 @@ describe('clientIp', () => {
     );
   });
 
+  it('agrupa IPv6 pelo prefixo /64 (um /64 inteiro é um único cliente)', () => {
+    const a = clientIp(req({ 'cf-connecting-ip': '2001:db8:1:2:aaaa::1' }));
+    const b = clientIp(req({ 'cf-connecting-ip': '2001:db8:1:2:ffff:ffff:ffff:ffff' }));
+    expect(a).toBe('2001:db8:1:2::/64');
+    expect(b).toBe(a);
+    expect(clientIp(req({ 'cf-connecting-ip': '2001:db8::1' }))).toBe('2001:db8:0:0::/64');
+    expect(clientIp(req({ 'cf-connecting-ip': '::ffff:198.51.100.7' }))).toBe('198.51.100.7');
+  });
+
   it('sem nada disponível, devolve "unknown"', () => {
     expect(clientIp(req({}))).toBe('unknown');
   });

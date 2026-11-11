@@ -53,21 +53,23 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
       },
     },
     async (request, reply) => {
-      if (loginGuard.isLocked()) {
+      const parsed = loginBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        // Body malformado também vira 401 genérico (sem vazar a forma esperada). Não
+        // conta na trava global: não é palpite de senha (e travaria o login de graça).
+        return reply.code(401).send({ message: INVALID_CREDENTIALS });
+      }
+
+      const email = parsed.data.email.trim().toLowerCase();
+
+      // Reserva a vaga ANTES do bcrypt: tentativas simultâneas não furam a trava.
+      const attempt = loginGuard.tryAcquire();
+      if (!attempt) {
         request.log.warn({ ip: clientIp(request) }, 'login bloqueado: trava global de falhas');
         return reply
           .code(429)
           .send({ message: 'Muitas tentativas de login. Tente novamente mais tarde.' });
       }
-
-      const parsed = loginBodySchema.safeParse(request.body);
-      if (!parsed.success) {
-        // Body malformado também vira 401 genérico (sem vazar a forma esperada).
-        loginGuard.recordFailure();
-        return reply.code(401).send({ message: INVALID_CREDENTIALS });
-      }
-
-      const email = parsed.data.email.trim().toLowerCase();
 
       // Comparamos a senha SEMPRE (mesmo com e-mail errado) para não dar pista de
       // timing sobre qual e-mail existe. O resultado só importa se o e-mail casa.
@@ -75,10 +77,12 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
       const emailOk = email === env.AUTH_EMAIL;
 
       if (!emailOk || !passwordOk) {
-        loginGuard.recordFailure();
         request.log.warn({ email, ip: clientIp(request) }, 'login negado: credenciais inválidas');
         return reply.code(401).send({ message: INVALID_CREDENTIALS });
       }
+
+      // Login ok: a tentativa não conta como falha.
+      loginGuard.release(attempt);
 
       const user = await upsertUser({
         email,
