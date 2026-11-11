@@ -60,18 +60,40 @@ export function formatAlertTime(date: Date): string {
   return `${p.day}/${p.month} ${p.hour}:${p.minute}:${p.second}`;
 }
 
+/**
+ * Escapa texto dinâmico para o Markdown LEGADO do Telegram (fora de blocos de código).
+ * Sem isso, um `_` solto (ex.: tag `#Odyssey_OLED`, grupo "promo_tech") faz o Telegram
+ * responder 400 "can't parse entities" — e o alerta nunca chegava.
+ */
+export function escapeMarkdown(text: string): string {
+  return text.replace(/([_*`[])/g, '\\$1');
+}
+
+/** Versão texto puro de um alerta em Markdown legado (fallback quando o parse falha). */
+export function markdownToPlainText(markdown: string): string {
+  return markdown
+    .replace(/```/g, '')
+    .replace(/(?<!\\)\*/g, '')
+    .replace(/\\([_*`[])/g, '$1');
+}
+
 /** Formata o Alerta de Detecção (portado de telegram.service.formatIndividualMessage). */
 export function formatDetectionAlert(alert: DetectionAlert): string {
-  const tags = alert.matchedKeywords.map((k) => `#${k.replace(/\s+/g, '_')}`).join(' ');
+  // Todo dado dinâmico fora do bloco de código passa por escapeMarkdown.
+  const tags = alert.matchedKeywords
+    .map((k) => escapeMarkdown(`#${k.replace(/\s+/g, '_')}`))
+    .join(' ');
   let text = '🎯 *Oferta detectada*\n\n';
-  text += `📱 *Grupo:* ${alert.groupName}\n`;
-  if (alert.sender) text += `👤 *De:* ${alert.sender}\n`;
+  text += `📱 *Grupo:* ${escapeMarkdown(alert.groupName)}\n`;
+  if (alert.sender) text += `👤 *De:* ${escapeMarkdown(alert.sender)}\n`;
   text += `🕐 *Hora:* ${alert.time}\n`;
   if (alert.matchedKeywords.length > 0) text += `🔍 *Palavras-chave:* ${tags}\n`;
   if (alert.price?.insight) text += formatPriceInsight(alert.price.insight);
   // URL crua (sem [texto](url)): a chave vai percent-encoded e não tem "_" nem "*".
   if (alert.historyUrl) text += `📈 Histórico: ${alert.historyUrl}\n`;
-  const body = alert.text.length > 1000 ? `${alert.text.slice(0, 1000)}\n...` : alert.text;
+  const raw = alert.text.length > 1000 ? `${alert.text.slice(0, 1000)}\n...` : alert.text;
+  // ``` dentro da mensagem fecharia o bloco de código antes da hora.
+  const body = raw.replace(/```/g, "'''");
   text += `\n💬 *Mensagem:*\n\`\`\`\n${body}\n\`\`\``;
   return text;
 }
@@ -149,25 +171,32 @@ export class TelegramNotifier {
 
   private async send(text: string): Promise<boolean> {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: this.chatId,
-          text,
-          parse_mode: 'Markdown',
-          disable_web_page_preview: true,
-        }),
-      });
-      if (!res.ok) {
-        console.error('[telegram] envio falhou:', res.status, await res.text());
+      const res = await this.post({ text, parse_mode: 'Markdown' });
+      if (res.ok) return true;
+      const detail = await res.text();
+      // Markdown inválido é erro PERMANENTE: reenviar igual falharia 5x e o alerta se
+      // perderia. Reenvia já em texto puro (sem formatação, mas o alerta chega).
+      if (res.status === 400 && /can't parse entities/i.test(detail)) {
+        console.warn('[telegram] Markdown recusado — reenviando em texto puro:', detail);
+        const plain = await this.post({ text: markdownToPlainText(text) });
+        if (plain.ok) return true;
+        console.error('[telegram] envio em texto puro falhou:', plain.status, await plain.text());
         return false;
       }
-      return true;
+      console.error('[telegram] envio falhou:', res.status, detail);
+      return false;
     } catch (err) {
       console.error('[telegram] erro de rede:', err);
       return false;
     }
+  }
+
+  private post(payload: { text: string; parse_mode?: 'Markdown' }): Promise<Response> {
+    return fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: this.chatId, disable_web_page_preview: true, ...payload }),
+    });
   }
 }
 
