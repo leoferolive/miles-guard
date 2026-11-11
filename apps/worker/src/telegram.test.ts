@@ -64,7 +64,8 @@ describe('formatDetectionAlert — Markdown seguro (alertas com "Odyssey OLED" n
       time: '10/11 16:11:50',
     });
     expect(out).toContain(`${'a'.repeat(999)}🔥\n...`);
-    expect(out.isWellFormed()).toBe(true);
+    // Sem surrogate UTF-16 solto (emoji partido ao meio).
+    expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
   });
 
   it('fallback em texto puro remove os escapes de um alerta real', () => {
