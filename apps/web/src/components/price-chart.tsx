@@ -36,7 +36,8 @@ export const PriceChart = ({ points, median }: PriceChartProps) => {
   const y = (v: number) => PAD.top + (1 - (v - yLow) / (yHigh - yLow)) * (H - PAD.top - PAD.bottom);
 
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(times[i] ?? 0)},${y(p.price)}`).join(' ');
-  const ticks = [maxPrice, median, minPrice];
+  // Sem repetição: mediana costuma coincidir com o menor/maior preço.
+  const ticks = [...new Set([maxPrice, median, minPrice])];
 
   return (
     <svg

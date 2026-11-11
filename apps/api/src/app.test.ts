@@ -449,6 +449,19 @@ describe('nossoRadar API', () => {
     expect(body.stats).toEqual({ offers: 2, median: 1750.5, min: 1701, max: 1800 });
   });
 
+  it('GET /api/products/:key/history aceita chave longa (título com muitas palavras)', async () => {
+    const longKey = `w:${Array.from({ length: 30 }, (_, i) => `palavra${i}`).join('+')}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/products/${encodeURIComponent(longKey)}/history`,
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    // Chega na rota (404 de negócio "sem histórico"), não no 404 de rota do Fastify.
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ message: 'Produto sem histórico de preço.' });
+    expect(dbMock.getProductPricePoints).toHaveBeenCalledWith(longKey);
+  });
+
   it('GET /api/products/:key/history de produto sem histórico → 404', async () => {
     const res = await app.inject({
       method: 'GET',

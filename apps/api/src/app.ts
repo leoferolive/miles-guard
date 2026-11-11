@@ -53,6 +53,9 @@ export function buildApp(): FastifyInstance {
           }
         : false,
     trustProxy: true,
+    // Chaves de produto `w:` (palavras do título, percent-encoded) passam fácil dos 100
+    // caracteres default do router → 404 de rota no link "📈 Histórico".
+    maxParamLength: 1024,
   });
 
   app.setValidatorCompiler(validatorCompiler);

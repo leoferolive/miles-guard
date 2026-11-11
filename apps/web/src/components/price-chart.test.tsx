@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PricePoint } from '@nossoradar/shared';
 
@@ -31,6 +31,13 @@ describe('PriceChart', () => {
     render(<PriceChart points={points} median={1718} />);
     expect(screen.getByTestId('median-line')).toBeTruthy();
     expect(screen.getByRole('img').getAttribute('aria-label')).toContain('mediana R$ 1.718');
+  });
+
+  it('mediana igual ao menor preço não duplica a linha de referência', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<PriceChart points={[point('1', '2026-10-01T12:00:00Z', 100), point('2', '2026-10-02T12:00:00Z', 100)]} median={100} />);
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it('um único ponto não quebra (sem divisão por zero)', () => {

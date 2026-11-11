@@ -17,6 +17,7 @@ export const ProdutoPage = () => {
   useEffect(() => {
     let cancelled = false;
     setHistory(null);
+    setError(null);
     radarService
       .getProductHistory(productKey)
       .then((h) => {

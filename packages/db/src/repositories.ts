@@ -405,7 +405,10 @@ export async function listProducts(
   opts: { search?: string; limit?: number } = {},
 ): Promise<ProductSummaryRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
-  const search = opts.search?.trim() ? `%${opts.search.trim()}%` : null;
+  // % e _ digitados são literais (escapados), não curingas do ILIKE.
+  const search = opts.search?.trim()
+    ? `%${opts.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    : null;
   const rows = await db.execute<{
     product_key: string;
     product_title: string | null;
