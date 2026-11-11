@@ -21,6 +21,7 @@ vi.mock('@/components/app-shell', () => ({
 const product: ProductSummary = {
   productKey: 'c:5800x3d',
   title: 'Processador AMD Ryzen 7 5800X3D',
+  category: 'Processador',
   lastPrice: 1671,
   lastSeenAt: '2026-11-10T19:11:50.000Z',
   offers: 6,

@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import {
   createMessageFingerprint,
   getMessageText,
+  keywordAppliesTo,
   matchKeywords,
+  type KeywordRule,
   OFFER_EXTRACTION_VERSION,
   priceInsight,
   type PriceInsight,
@@ -43,7 +45,7 @@ import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './teleg
 const PRICE_HISTORY_TIMEOUT_MS = 2_000;
 
 /** Desfecho de uma mensagem de grupo monitorado (para log + métrica). */
-type MessageOutcome = 'detected' | 'no_text' | 'dedup' | 'no_match';
+type MessageOutcome = 'detected' | 'no_text' | 'dedup' | 'no_match' | 'out_of_category';
 
 /** Prévia curta e single-line do texto para logs (privacidade: nunca o corpo todo). */
 function preview(text: string, max = 40): string {
@@ -55,7 +57,7 @@ interface MonitoredGroup {
   jid: string;
   name: string;
   enabled: boolean;
-  keywords: string[];
+  keywords: KeywordRule[];
 }
 
 /**
@@ -346,8 +348,8 @@ export class WhatsAppWorker {
       this.dedup.set(fingerprint, Date.now());
     }
 
-    const matched = matchKeywords(text, monitored.keywords);
-    if (matched.length === 0) {
+    const textual = monitored.keywords.filter((k) => matchKeywords(text, [k.term]).length > 0);
+    if (textual.length === 0) {
       this.recordOutcome(jid, 'no_match');
       this.logDebug(
         `[worker] sem match em "${monitored.name}" [${keys.join('+')}, ${text.trim().length} chars]: "${preview(text)}"`,
@@ -355,8 +357,18 @@ export class WhatsAppWorker {
       return;
     }
 
-    // Preço + identidade do produto (puro, sem I/O) para o histórico de preço.
+    // Preço, produto e CATEGORIA (puro, sem I/O). A categoria decide se a Palavra-chave
+    // vale aqui (ex.: x3d só em Processador — gabinete "ideal para 5800x3d" não).
     const offer = safeExtractOffer(text);
+    const matched = textual.filter((k) => keywordAppliesTo(k, offer.category)).map((k) => k.term);
+    if (matched.length === 0) {
+      this.recordOutcome(jid, 'out_of_category');
+      // INFO (não debug): é a curadoria cortando algo — precisa ser auditável.
+      console.log(
+        `[worker] fora da categoria em "${monitored.name}" [${textual.map((k) => k.term).join(', ')} ≠ ${offer.category}]: "${preview(offer.title ?? text)}"`,
+      );
+      return;
+    }
     const detectionId = await insertDetection({
       groupJid: jid,
       groupName: monitored.name,
@@ -368,6 +380,7 @@ export class WhatsAppWorker {
       price: offer.price,
       productKey: offer.productKey,
       productTitle: offer.title,
+      category: offer.category,
       extractionVersion: OFFER_EXTRACTION_VERSION,
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
@@ -394,6 +407,7 @@ export class WhatsAppWorker {
         time,
         price,
         historyUrl,
+        category: offer.category,
       }),
       () => {
         void markDetectionNotified(detectionId);

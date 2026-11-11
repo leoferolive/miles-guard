@@ -18,6 +18,8 @@ export interface DetectionAlert {
   price?: { current: number; insight: PriceInsight | null };
   /** Página do produto no Painel (só quando há produto identificado e PUBLIC_URL). */
   historyUrl?: string;
+  /** Categoria do produto (Processador, Monitor, TV, …). "Outros" não é exibida. */
+  category?: string;
 }
 
 const BRL_INT = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -87,6 +89,9 @@ export function formatDetectionAlert(alert: DetectionAlert): string {
   text += `📱 *Grupo:* ${escapeMarkdown(alert.groupName)}\n`;
   if (alert.sender) text += `👤 *De:* ${escapeMarkdown(alert.sender)}\n`;
   text += `🕐 *Hora:* ${alert.time}\n`;
+  if (alert.category && alert.category !== 'Outros') {
+    text += `🏷 *Categoria:* ${escapeMarkdown(alert.category)}\n`;
+  }
   if (alert.matchedKeywords.length > 0) text += `🔍 *Palavras-chave:* ${tags}\n`;
   if (alert.price?.insight) text += formatPriceInsight(alert.price.insight);
   // URL crua (sem [texto](url)). A chave do produto só tem [a-z0-9.:+-] (ver

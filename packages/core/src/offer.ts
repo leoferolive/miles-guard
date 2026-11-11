@@ -1,10 +1,11 @@
+import { classifyProduct } from './category.js';
 import { normalizeText } from './text.js';
 
 /**
  * Versão das regras de extração. Ao mudar qualquer heurística abaixo, incremente:
  * o worker reprocessa no boot as detecções gravadas com versão menor (backfill).
  */
-export const OFFER_EXTRACTION_VERSION = 2;
+export const OFFER_EXTRACTION_VERSION = 3;
 
 export interface OfferInfo {
   /** Linha do produto, sem markdown/emoji (null se não identificada). */
@@ -17,9 +18,11 @@ export interface OfferInfo {
    * Viés deliberado: na dúvida SEPARA produtos — mediana errada é pior que nenhuma.
    */
   productKey: string | null;
+  /** Categoria do produto pelo título (ver classifyProduct); 'Outros' se desconhecida. */
+  category: string;
 }
 
-const EMPTY: OfferInfo = { title: null, price: null, productKey: null };
+const EMPTY: OfferInfo = { title: null, price: null, productKey: null, category: 'Outros' };
 
 /**
  * Valor em BRL: "1.799,00", "1130,68", "1.394", "1768", "99.90". O lookahead final impede
@@ -233,5 +236,6 @@ export function extractOffer(text: string): OfferInfo {
     title,
     price: price !== null && price >= MIN_PRICE && price <= MAX_PRICE ? price : null,
     productKey: title ? productKeyFromTitle(title) : null,
+    category: classifyProduct(title),
   };
 }

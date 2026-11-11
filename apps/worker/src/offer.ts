@@ -1,6 +1,6 @@
 import { extractOffer, type OfferInfo } from '@nossoradar/core';
 
-const NO_OFFER: OfferInfo = { title: null, price: null, productKey: null };
+const NO_OFFER: OfferInfo = { title: null, price: null, productKey: null, category: 'Outros' };
 
 /**
  * extractOffer que nunca lança: um bug numa heurística de preço não pode derrubar a

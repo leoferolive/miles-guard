@@ -15,6 +15,7 @@ function serializeDetection(d: DetectionRow): Record<string, unknown> {
     notifiedTelegram: d.notifiedTelegram,
     price: d.price,
     productKey: d.productKey,
+    category: d.category,
   };
 }
 
@@ -29,6 +30,7 @@ export const detectionsRoutes: FastifyPluginAsync = async (fastify) => {
       offset: q.offset,
       groupJid: q.groupJid,
       keyword: q.keyword,
+      category: q.category,
       since: q.since ? new Date(q.since) : undefined,
     });
     return {

@@ -18,7 +18,7 @@ export const productsRoutes: FastifyPluginAsync = async (fastify) => {
   /** GET /api/products?search&limit → produtos com último preço, mediana e menor preço. */
   fastify.get('/products', async (request) => {
     const q = listProductsQuery.parse(request.query);
-    const rows = await listProducts({ search: q.search, limit: q.limit });
+    const rows = await listProducts({ search: q.search, category: q.category, limit: q.limit });
     return rows.map((r) =>
       productSummarySchema.parse({ ...r, lastSeenAt: r.lastSeenAt.toISOString() }),
     );

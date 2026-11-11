@@ -144,6 +144,16 @@ describe('formatDetectionAlert — histórico de preço', () => {
     expect(out).toContain('📉 *Entre os menores preços*');
   });
 
+  it('mostra a categoria do produto', () => {
+    const out = formatDetectionAlert({ ...base, category: 'Processador' });
+    expect(out).toContain('🏷 *Categoria:* Processador');
+  });
+
+  it('categoria "Outros" não aparece (não ajuda a separar nada)', () => {
+    const out = formatDetectionAlert({ ...base, category: 'Outros' });
+    expect(out).not.toContain('Categoria');
+  });
+
   it('inclui o link do histórico no Painel quando informado', () => {
     const out = formatDetectionAlert({
       ...base,

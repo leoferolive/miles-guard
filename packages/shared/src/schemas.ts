@@ -32,6 +32,8 @@ export const keywordSchema = z.object({
   id: z.string().uuid(),
   monitoredGroupId: z.string().uuid(),
   term: z.string().min(1),
+  /** Categorias em que vale (vazio = qualquer). Ex.: x3d → ['Processador', 'Kit']. */
+  categories: z.array(z.string()),
   createdAt: z.string().datetime(),
 });
 export type Keyword = z.infer<typeof keywordSchema>;
@@ -61,6 +63,8 @@ export const detectionSchema = z.object({
   /** Preço/produto extraídos do texto (null se não identificados). */
   price: z.number().nullable(),
   productKey: z.string().nullable(),
+  /** Categoria do produto (Processador, Monitor, TV, …); null em detecção não reprocessada. */
+  category: z.string().nullable(),
 });
 export type Detection = z.infer<typeof detectionSchema>;
 
@@ -69,6 +73,7 @@ export const productSummarySchema = z.object({
   productKey: z.string(),
   /** Título da oferta mais recente do produto. */
   title: z.string().nullable(),
+  category: z.string().nullable(),
   lastPrice: z.number(),
   lastSeenAt: z.string().datetime(),
   /** Ofertas distintas (1 por dia+preço — repostagens não contam). */
@@ -104,6 +109,7 @@ export type ProductHistory = z.infer<typeof productHistorySchema>;
 
 export const listProductsQuery = z.object({
   search: z.string().trim().max(100).optional(),
+  category: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
@@ -132,7 +138,13 @@ export type UpdateMonitoredGroupInput = z.infer<typeof updateMonitoredGroupInput
 
 export const addKeywordInput = z.object({
   term: z.string().min(1),
+  categories: z.array(z.string().min(1)).max(30).default([]),
 });
+
+export const updateKeywordInput = z.object({
+  categories: z.array(z.string().min(1)).max(30),
+});
+export type UpdateKeywordInput = z.infer<typeof updateKeywordInput>;
 export type AddKeywordInput = z.infer<typeof addKeywordInput>;
 
 // --- Query de listagem de Detecções ---
@@ -141,6 +153,7 @@ export const listDetectionsQuery = z.object({
   offset: z.coerce.number().int().nonnegative().optional(),
   groupJid: z.string().min(1).optional(),
   keyword: z.string().min(1).optional(),
+  category: z.string().min(1).optional(),
   since: z.string().datetime().optional(),
 });
 export type ListDetectionsQuery = z.infer<typeof listDetectionsQuery>;

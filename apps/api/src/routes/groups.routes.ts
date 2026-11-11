@@ -1,3 +1,4 @@
+import { PRODUCT_CATEGORIES } from '@nossoradar/core';
 import {
   addKeyword,
   createMonitoredGroup,
@@ -5,6 +6,7 @@ import {
   deleteMonitoredGroup,
   listMonitoredGroups,
   notify,
+  setKeywordCategories,
   setMonitoredGroupEnabled,
   type KeywordRow,
   type MonitoredGroupRow,
@@ -13,6 +15,7 @@ import {
   addKeywordInput,
   createMonitoredGroupInput,
   NOTIFY_CHANNELS,
+  updateKeywordInput,
   updateMonitoredGroupInput,
 } from '@nossoradar/shared';
 import type { FastifyPluginAsync } from 'fastify';
@@ -20,11 +23,22 @@ import { z } from 'zod';
 
 const idParam = z.object({ id: z.string().uuid() });
 
+/** Só categorias conhecidas (evita restrição que nunca casa por erro de digitação). */
+function assertKnownCategories(categories: string[]): void {
+  const unknown = categories.filter((c) => !PRODUCT_CATEGORIES.includes(c));
+  if (unknown.length > 0) {
+    throw Object.assign(new Error(`Categoria desconhecida: ${unknown.join(', ')}`), {
+      statusCode: 400,
+    });
+  }
+}
+
 function serializeKeyword(k: KeywordRow): Record<string, unknown> {
   return {
     id: k.id,
     monitoredGroupId: k.monitoredGroupId,
     term: k.term,
+    categories: k.categories,
     createdAt: k.createdAt.toISOString(),
   };
 }
@@ -84,12 +98,27 @@ export const groupsRoutes: FastifyPluginAsync = async (fastify) => {
   /** POST /api/groups/:id/keywords → adiciona Palavra-chave e NOTIFY config_changed. */
   fastify.post('/groups/:id/keywords', async (request, reply) => {
     const { id } = idParam.parse(request.params);
-    const { term } = addKeywordInput.parse(request.body);
-    const keyword = await addKeyword(id, term);
+    const { term, categories } = addKeywordInput.parse(request.body);
+    assertKnownCategories(categories);
+    const keyword = await addKeyword(id, term, categories);
     if (!keyword) return reply.code(404).send({ message: 'Grupo monitorado não encontrado.' });
     await notify(NOTIFY_CHANNELS.configChanged);
     return reply.code(201).send(serializeKeyword(keyword));
   });
+
+  /** PATCH /api/keywords/:id → define em quais categorias vale ([] = qualquer). */
+  fastify.patch('/keywords/:id', async (request, reply) => {
+    const { id } = idParam.parse(request.params);
+    const { categories } = updateKeywordInput.parse(request.body);
+    assertKnownCategories(categories);
+    const keyword = await setKeywordCategories(id, categories);
+    if (!keyword) return reply.code(404).send({ message: 'Palavra-chave não encontrada.' });
+    await notify(NOTIFY_CHANNELS.configChanged);
+    return serializeKeyword(keyword);
+  });
+
+  /** GET /api/categories → categorias de produto possíveis (ordem de exibição). */
+  fastify.get('/categories', async () => PRODUCT_CATEGORIES);
 
   /** DELETE /api/keywords/:id → remove Palavra-chave e NOTIFY config_changed. */
   fastify.delete('/keywords/:id', async (request, reply) => {
