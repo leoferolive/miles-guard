@@ -192,8 +192,8 @@ describe('extractOffer — chave do produto', () => {
     expect(extractOffer(PROMOZONE).productKey).toBe('c:qp1425');
   });
 
-  it('kit (CPU + placa) NÃO se mistura com a CPU avulsa', () => {
-    expect(extractOffer(RBSTORE_KIT).productKey).toBe('c:7800x3d+x870');
+  it('kit (CPU + placa) NÃO se mistura com a CPU avulsa (kit fica sem chave)', () => {
+    expect(extractOffer(RBSTORE_KIT).productKey).toBeNull();
   });
 
   it('código citado na descrição não vira produto (só o título conta)', () => {
@@ -229,5 +229,69 @@ describe('extractOffer — chave do produto', () => {
   it('sem código de modelo, usa o conjunto exato de palavras do título', () => {
     expect(extractOffer(OFCPROMO_SEM_CODIGO).productKey).toBe('w:aparador+oneblade+pelos+philips');
     expect(extractOffer(PROMOZONE_TV).productKey).toBe('w:4k+55+qled+smart+tcl+tv');
+  });
+});
+
+// --- Achados da revisão do PR #18 ---
+describe('extractOffer — preço (endurecimento)', () => {
+  it.each([
+    ['número de Pix na linha 💵 não é preço', '*Produto X Y Z*\n\n💵 Pix 11987654321', null],
+    ['valor absurdo vira null (não estoura a coluna)', 'Produto X Y Z\n\n💵 R$ 99999999999', null],
+    ['"R$ 100 OFF" sozinho não vira R$ 10', 'Produto X Y Z\n\nCupom R$ 100 OFF', null],
+    ['"por" em prosa não vence a linha 💵', 'Produto X Y Z\n\n💵 R$ 299\nAssinatura de teste por 30 dias', 299],
+    ['"de … por" sem R$/negrito não é preço', 'Leve 12 de 3 por 2 unidades', null],
+    ['💰 (cashback) não é a linha de preço', 'Produto X Y Z\n\nR$ 299\n💰 10% de cashback', 299],
+    ['parcela na linha 💵 não é o preço', 'Produto X Y Z\n\n💵 10x de R$ 89,90', null],
+    ['parcela + total na linha 💵 → total', 'Produto X Y Z\n\n💵 R$ 899 em 10x de R$ 89,90', 899],
+    ['ponto como separador decimal', 'Produto X Y Z\n\n💵 R$ 99.90', 99.9],
+  ])('%s', (_, text, price) => {
+    expect(extractOffer(text).price).toBe(price);
+  });
+});
+
+describe('extractOffer — chave (endurecimento contra junções erradas)', () => {
+  const key = (title: string) => extractOffer(`${title}\n\n💵 R$ 1000`).productKey;
+
+  it('só abreviação de linha (i5/r7) não vira chave de código', () => {
+    expect(key('Notebook Dell Inspiron Intel Core i5 8GB')).not.toBe(key('Notebook Lenovo IdeaPad i5 16GB'));
+    expect(key('Notebook Dell Inspiron Intel Core i5')).not.toMatch(/^c:/);
+  });
+
+  it('código genérico (5g, ps5, m.2, 4l, 5in1) não vira chave nem junta produtos', () => {
+    expect(key('Smartphone Motorola Moto G 5G 128GB')).not.toMatch(/^c:/);
+    expect(key('Smartphone Motorola Moto G 5G 128GB')).not.toBe(key('Smartphone Redmi Note 13 5G 128GB'));
+    expect(key('Console PlayStation PS5 Slim')).not.toBe(key('Controle DualSense PS5'));
+    expect(key('Air Fryer Mondial 4L Preta')).not.toMatch(/^c:/);
+    expect(key('Carregador Turbo 5in1 Universal')).not.toMatch(/^c:/);
+  });
+
+  it('m.2 não substitui o modelo real com hífen', () => {
+    expect(key('Placa-mãe MSI A520m-a Pro, AMD AM4, DDR4, M.2')).toBe('c:a520m-a+pro');
+  });
+
+  it('configuração diferente do mesmo modelo não junta (CPU do notebook)', () => {
+    expect(key('Notebook Positivo Vision R15M Ryzen 3-7330U 8GB')).not.toBe(
+      key('Notebook Positivo Vision R15M Ryzen 5-7520U 8GB'),
+    );
+  });
+
+  it('capacidade entra na chave (1TB ≠ 2TB)', () => {
+    expect(key('SSD Kingston NV3 1TB M.2 NVMe')).not.toBe(key('SSD Kingston NV3 2TB M.2 NVMe'));
+  });
+
+  it('sufixo do modelo entra na chave (S24 ≠ S24 Ultra), "Max Turbo" de CPU não', () => {
+    expect(key('Samsung Galaxy S24 256GB')).not.toBe(key('Samsung Galaxy S24 Ultra 256GB'));
+    expect(key('Ryzen 7 5800X3D 4.5GHz Max Turbo')).toBe('c:5800x3d');
+  });
+
+  it('kit com item extra sem código não se mistura com o avulso', () => {
+    expect(key('Processador AMD Ryzen 5 5500X3D + Water Cooler')).toBeNull();
+    expect(key('Processador AMD Ryzen 5 5500X3D')).toBe('c:5500x3d');
+  });
+
+  it('variação só por quantidade (2 ≠ 3 lâminas) não junta', () => {
+    expect(key('Lâminas de Reposição Philips OneBlade 2 unidades')).not.toBe(
+      key('Lâminas de Reposição Philips OneBlade 3 unidades'),
+    );
   });
 });

@@ -3,7 +3,6 @@ import { join } from 'node:path';
 
 import {
   createMessageFingerprint,
-  extractOffer,
   getMessageText,
   matchKeywords,
   OFFER_EXTRACTION_VERSION,
@@ -37,6 +36,7 @@ import {
 
 import { env } from './env.js';
 import { detectionsCounter, monitoredMessagesCounter, setWhatsappConnectionState } from './metrics.js';
+import { safeExtractOffer } from './offer.js';
 import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
 
 /** Teto para a consulta do histórico de preço: o alerta não espera mais que isso. */
@@ -356,7 +356,7 @@ export class WhatsAppWorker {
     }
 
     // Preço + identidade do produto (puro, sem I/O) para o histórico de preço.
-    const offer = extractOffer(text);
+    const offer = safeExtractOffer(text);
     const detectionId = await insertDetection({
       groupJid: jid,
       groupName: monitored.name,

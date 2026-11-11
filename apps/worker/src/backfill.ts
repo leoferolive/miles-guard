@@ -1,5 +1,7 @@
-import { extractOffer, OFFER_EXTRACTION_VERSION } from '@nossoradar/core';
+import { OFFER_EXTRACTION_VERSION } from '@nossoradar/core';
 import { listDetectionsPendingExtraction, updateDetectionOffer } from '@nossoradar/db';
+
+import { safeExtractOffer } from './offer.js';
 
 /**
  * Preenche preço/produto das detecções gravadas antes do histórico de preço existir (ou
@@ -14,7 +16,7 @@ export async function backfillOfferExtraction(opts: { batchSize?: number } = {})
     const batch = await listDetectionsPendingExtraction(OFFER_EXTRACTION_VERSION, batchSize);
     if (batch.length === 0) return total;
     for (const row of batch) {
-      const offer = extractOffer(row.messageText);
+      const offer = safeExtractOffer(row.messageText);
       // Grava a versão mesmo sem oferta: senão a linha volta em todo lote (loop infinito).
       await updateDetectionOffer(row.id, {
         price: offer.price,
