@@ -5,9 +5,13 @@ import {
   createMessageFingerprint,
   getMessageText,
   matchKeywords,
+  OFFER_EXTRACTION_VERSION,
+  priceInsight,
+  type PriceInsight,
   type WAMessageContent,
 } from '@nossoradar/core';
 import {
+  getPreviousPrices,
   insertDetection,
   listMonitoredGroupsWithKeywords,
   markDetectionNotified,
@@ -32,7 +36,11 @@ import {
 
 import { env } from './env.js';
 import { detectionsCounter, monitoredMessagesCounter, setWhatsappConnectionState } from './metrics.js';
+import { safeExtractOffer } from './offer.js';
 import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
+
+/** Teto para a consulta do histórico de preço: o alerta não espera mais que isso. */
+const PRICE_HISTORY_TIMEOUT_MS = 2_000;
 
 /** Desfecho de uma mensagem de grupo monitorado (para log + métrica). */
 type MessageOutcome = 'detected' | 'no_text' | 'dedup' | 'no_match';
@@ -347,6 +355,8 @@ export class WhatsAppWorker {
       return;
     }
 
+    // Preço + identidade do produto (puro, sem I/O) para o histórico de preço.
+    const offer = safeExtractOffer(text);
     const detectionId = await insertDetection({
       groupJid: jid,
       groupName: monitored.name,
@@ -355,6 +365,10 @@ export class WhatsAppWorker {
       matchedKeywords: matched,
       messageId: message.key?.id ?? null,
       messageTimestamp,
+      price: offer.price,
+      productKey: offer.productKey,
+      productTitle: offer.title,
+      extractionVersion: OFFER_EXTRACTION_VERSION,
     });
     await notify(NOTIFY_CHANNELS.detectionCreated, detectionId);
     this.recordOutcome(jid, 'detected');
@@ -363,14 +377,43 @@ export class WhatsAppWorker {
     // `notified_telegram` só vira true quando o envio confirma (onSent). Se o Telegram
     // estiver desabilitado, fica false (= não confirmado), por design.
     const time = formatAlertTime(new Date(ts * 1000));
+    const price =
+      offer.price !== null
+        ? { current: offer.price, insight: await this.loadPriceInsight(offer.price, offer.productKey, detectionId) }
+        : undefined;
     this.telegram.enqueue(
-      formatDetectionAlert({ groupName: monitored.name, sender, text, matchedKeywords: matched, time }),
+      formatDetectionAlert({ groupName: monitored.name, sender, text, matchedKeywords: matched, time, price }),
       () => {
         void markDetectionNotified(detectionId);
       },
     );
 
     console.log(`[worker] detecção em "${monitored.name}" [${keys.join('+')}]: ${matched.join(', ')}`);
+  }
+
+  /**
+   * Mediana/selo do produto. Best-effort: qualquer falha vira `null` e o alerta sai sem
+   * a linha de preço — o histórico nunca atrasa nem derruba um alerta.
+   */
+  private async loadPriceInsight(
+    current: number,
+    productKey: string | null,
+    detectionId: string,
+  ): Promise<PriceInsight | null> {
+    if (!productKey) return null;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), PRICE_HISTORY_TIMEOUT_MS);
+      });
+      const previous = await Promise.race([getPreviousPrices(productKey, detectionId), timeout]);
+      return priceInsight(current, previous);
+    } catch (err) {
+      console.warn('[worker] histórico de preço indisponível; alerta segue sem mediana:', err);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Contabiliza o desfecho de uma mensagem de grupo monitorado (Prometheus). */

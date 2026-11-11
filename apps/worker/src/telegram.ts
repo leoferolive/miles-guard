@@ -1,3 +1,5 @@
+import type { PriceInsight } from '@nossoradar/core';
+
 import { env } from './env.js';
 
 interface QueueItem {
@@ -12,6 +14,28 @@ export interface DetectionAlert {
   text: string;
   matchedKeywords: string[];
   time: string;
+  /** Preço extraído + comparação com o histórico do produto (insight null = histórico curto). */
+  price?: { current: number; insight: PriceInsight | null };
+}
+
+const BRL = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const PCT = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
+/** Linhas de histórico de preço do alerta (vazio se não há histórico suficiente). */
+function formatPriceInsight(insight: PriceInsight): string {
+  const direction =
+    insight.deltaPct === 0
+      ? 'igual à mediana'
+      : `${PCT.format(Math.abs(insight.deltaPct))}% ${insight.deltaPct < 0 ? 'abaixo' : 'acima'}`;
+  let text = `📊 *Mediana:* ${BRL.format(insight.median)} (${insight.sampleSize} ofertas) · ${direction}\n`;
+  if (insight.badge === 'lowest') text += '🏆 *Menor preço já visto!*\n';
+  if (insight.badge === 'among_lowest') text += '📉 *Entre os menores preços*\n';
+  return text;
 }
 
 const ALERT_TIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
@@ -43,6 +67,7 @@ export function formatDetectionAlert(alert: DetectionAlert): string {
   if (alert.sender) text += `👤 *De:* ${alert.sender}\n`;
   text += `🕐 *Hora:* ${alert.time}\n`;
   if (alert.matchedKeywords.length > 0) text += `🔍 *Palavras-chave:* ${tags}\n`;
+  if (alert.price?.insight) text += formatPriceInsight(alert.price.insight);
   const body = alert.text.length > 1000 ? `${alert.text.slice(0, 1000)}\n...` : alert.text;
   text += `\n💬 *Mensagem:*\n\`\`\`\n${body}\n\`\`\``;
   return text;

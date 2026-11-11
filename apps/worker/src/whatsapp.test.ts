@@ -20,6 +20,7 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('@nossoradar/db', () => ({
   insertDetection: vi.fn(async () => 'id'),
+  getPreviousPrices: vi.fn(async () => [] as number[]),
   listMonitoredGroupsWithKeywords: vi.fn(async () => []),
   markDetectionNotified: vi.fn(async () => undefined),
   notify: vi.fn(async () => undefined),
@@ -94,6 +95,8 @@ vi.mock('@whiskeysockets/baileys', () => ({
 const { WhatsAppWorker } = await import('./whatsapp.js');
 const dbMock = await import('@nossoradar/db');
 const metricsMock = await import('./metrics.js');
+const { formatDetectionAlert } = await import('./telegram.js');
+const { OFFER_EXTRACTION_VERSION } = await import('@nossoradar/core');
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
@@ -229,6 +232,62 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
 
     expect(dbMock.insertDetection).toHaveBeenCalledWith(
       expect.objectContaining({ messageTimestamp: null }),
+    );
+  });
+
+  it('extrai preço/produto e anexa a mediana ao alerta', async () => {
+    vi.mocked(dbMock.getPreviousPrices).mockResolvedValueOnce([1800, 1750, 1700]);
+    vi.mocked(formatDetectionAlert).mockClear();
+    const { handle } = newWorkerMonitoring(['x3d']);
+    await handle(
+      groupMsg({ conversation: 'Processador AMD Ryzen 7 5800X3D AM4\n\n💵 R$ 1701\n✅ https://meli.la/x' }, 'm-price'),
+    );
+
+    expect(dbMock.insertDetection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        price: 1701,
+        productKey: 'c:5800x3d',
+        productTitle: 'Processador AMD Ryzen 7 5800X3D AM4',
+        extractionVersion: OFFER_EXTRACTION_VERSION,
+      }),
+    );
+    expect(dbMock.getPreviousPrices).toHaveBeenCalledWith('c:5800x3d', 'id');
+    expect(formatDetectionAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        price: { current: 1701, insight: expect.objectContaining({ median: 1750, sampleSize: 3 }) },
+      }),
+    );
+  });
+
+  it('falha ao consultar o histórico NÃO impede o alerta (vai sem a mediana)', async () => {
+    vi.mocked(dbMock.getPreviousPrices).mockRejectedValueOnce(new Error('db fora'));
+    vi.mocked(formatDetectionAlert).mockClear();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { handle } = newWorkerMonitoring(['x3d']);
+    await handle(
+      groupMsg({ conversation: 'Processador AMD Ryzen 7 5800X3D AM4\n\n💵 R$ 1701' }, 'm-price-err'),
+    );
+
+    expect(formatDetectionAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ price: { current: 1701, insight: null } }),
+    );
+  });
+
+  it('histórico lento (banco travado) não segura o alerta além do timeout', async () => {
+    vi.useFakeTimers();
+    vi.mocked(dbMock.getPreviousPrices).mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(formatDetectionAlert).mockClear();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { handle } = newWorkerMonitoring(['x3d']);
+    const done = handle(
+      groupMsg({ conversation: 'Processador AMD Ryzen 7 5800X3D AM4\n\n💵 R$ 1701' }, 'm-price-slow'),
+    );
+    await vi.advanceTimersByTimeAsync(2_000);
+    await done;
+    vi.useRealTimers();
+
+    expect(formatDetectionAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ price: { current: 1701, insight: null } }),
     );
   });
 

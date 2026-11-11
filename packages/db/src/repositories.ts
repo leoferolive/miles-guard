@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, sql as dsql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, isNotNull, lt, ne, sql as dsql } from 'drizzle-orm';
 
 import { db } from './client.js';
 import {
@@ -354,6 +354,11 @@ export interface DetectionInput {
   messageId: string | null;
   /** Horário original da mensagem no WhatsApp (null se ausente). */
   messageTimestamp: Date | null;
+  /** Oferta extraída do texto (@nossoradar/core extractOffer). */
+  price: number | null;
+  productKey: string | null;
+  productTitle: string | null;
+  extractionVersion: number;
 }
 
 export async function insertDetection(input: DetectionInput): Promise<string> {
@@ -361,6 +366,48 @@ export async function insertDetection(input: DetectionInput): Promise<string> {
   const row = rows[0];
   if (!row) throw new Error('falha ao inserir detecção');
   return row.id;
+}
+
+/**
+ * Preços ANTERIORES do mesmo produto, sem repostagens: um ponto por (dia, preço) no fuso
+ * de Brasília — o IURI reposta a mesma oferta várias vezes no dia, o que puxaria a mediana.
+ */
+export async function getPreviousPrices(productKey: string, excludeId: string): Promise<number[]> {
+  const day = dsql`(${detections.detectedAt} at time zone 'America/Sao_Paulo')::date`;
+  const rows = await db
+    .selectDistinctOn([day, detections.price], { price: detections.price })
+    .from(detections)
+    .where(
+      and(
+        eq(detections.productKey, productKey),
+        ne(detections.id, excludeId),
+        isNotNull(detections.price),
+      ),
+    );
+  return rows.map((r) => r.price).filter((p): p is number => p !== null);
+}
+
+/** Detecções extraídas com versão de regra antiga (ou nunca extraídas) — para o backfill. */
+export async function listDetectionsPendingExtraction(
+  version: number,
+  limit: number,
+): Promise<{ id: string; messageText: string }[]> {
+  return db
+    .select({ id: detections.id, messageText: detections.messageText })
+    .from(detections)
+    .where(lt(detections.extractionVersion, version))
+    .limit(limit);
+}
+
+export interface DetectionOfferUpdate {
+  price: number | null;
+  productKey: string | null;
+  productTitle: string | null;
+  extractionVersion: number;
+}
+
+export async function updateDetectionOffer(id: string, offer: DetectionOfferUpdate): Promise<void> {
+  await db.update(detections).set(offer).where(eq(detections.id, id));
 }
 
 export async function markDetectionNotified(id: string): Promise<void> {

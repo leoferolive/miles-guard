@@ -15,6 +15,13 @@
       "when": 1794339321504,
       "tag": "0001_detections_message_timestamp",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794368585081,
+      "tag": "0002_detections_price_history",
+      "breakpoints": true
     }
   ]
 }
