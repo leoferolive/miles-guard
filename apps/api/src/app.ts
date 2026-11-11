@@ -20,6 +20,7 @@ import { authRoutes } from './routes/auth.routes.js';
 import { connectionRoutes } from './routes/connection.routes.js';
 import { detectionsRoutes } from './routes/detections.routes.js';
 import { groupsRoutes } from './routes/groups.routes.js';
+import { productsRoutes } from './routes/products.routes.js';
 import { whatsappRoutes } from './routes/whatsapp.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 
@@ -52,6 +53,9 @@ export function buildApp(): FastifyInstance {
           }
         : false,
     trustProxy: true,
+    // Chaves de produto `w:` (palavras do título, percent-encoded) passam fácil dos 100
+    // caracteres default do router → 404 de rota no link "📈 Histórico".
+    maxParamLength: 1024,
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -125,6 +129,7 @@ export function buildApp(): FastifyInstance {
   void app.register(groupsRoutes, { prefix: '/api' });
   void app.register(whatsappRoutes, { prefix: '/api' });
   void app.register(detectionsRoutes, { prefix: '/api' });
+  void app.register(productsRoutes, { prefix: '/api' });
   void app.register(wsRoutes);
 
   // SPA estática (Fase 4): serve apps/web/dist com history fallback.

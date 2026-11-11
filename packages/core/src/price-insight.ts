@@ -43,3 +43,21 @@ export function priceInsight(current: number, previous: number[]): PriceInsight 
 
   return { median: med, sampleSize: previous.length, deltaPct, badge };
 }
+
+const BRT_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' });
+
+/**
+ * Um preço por (dia em Brasília, preço): repostagens da mesma oferta no mesmo dia não
+ * contam várias vezes. Mesma regra do SQL de getPreviousPrices/listProducts.
+ */
+export function distinctDailyPrices(points: { at: Date; price: number }[]): number[] {
+  const seen = new Set<string>();
+  const out: number[] = [];
+  for (const p of points) {
+    const key = `${BRT_DAY.format(p.at)}|${p.price}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p.price);
+  }
+  return out;
+}

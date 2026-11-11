@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   NOTIFY_CHANNELS,
@@ -9,6 +10,7 @@ import {
 
 import { AppShell } from '@/components/app-shell';
 import { useRealtime } from '@/hooks/use-realtime';
+import { formatBRL, productPath } from '@/lib/format';
 import { radarService, type DetectionsPage } from '@/services/radar.service';
 
 const PAGE_SIZE = 20;
@@ -267,6 +269,12 @@ const DetectionItem = ({ detection, isNew }: DetectionItemProps) => (
       {detection.sender && <span>{detection.sender}</span>}
       <span>{new Date(detection.detectedAt).toLocaleString('pt-BR')}</span>
       <span>{detection.notifiedTelegram ? '✓ Telegram' : '○ não notificado'}</span>
+      {detection.price !== null && <span className="price-tag">{formatBRL(detection.price)}</span>}
+      {detection.productKey && detection.price !== null && (
+        <Link className="history-link" to={productPath(detection.productKey)}>
+          📈 Histórico
+        </Link>
+      )}
     </div>
   </article>
 );

@@ -106,6 +106,8 @@ vi.mock('@nossoradar/db', () => ({
         messageId: 'msg-1',
         detectedAt: now,
         notifiedTelegram: true,
+        price: 1701,
+        productKey: 'c:5800x3d',
       },
     ],
     total: 1,
@@ -117,6 +119,27 @@ vi.mock('@nossoradar/db', () => ({
     perGroup: [{ groupJid: '111@g.us', groupName: 'Passagens SUL', count: 3 }],
     topKeywords: [{ keyword: 'latam', count: 2 }],
   })),
+  listProducts: vi.fn(async () => [
+    {
+      productKey: 'c:5800x3d',
+      title: 'Processador AMD Ryzen 7 5800X3D',
+      lastPrice: 1701,
+      lastSeenAt: now,
+      offers: 6,
+      minPrice: 1671,
+      medianPrice: 1718,
+    },
+  ]),
+  getProductPricePoints: vi.fn(async (key: string) =>
+    key === 'c:5800x3d'
+      ? [
+          // 10/11 em BRT: duas postagens a 1701 (repost) + uma a 1800 → 2 ofertas distintas.
+          { detectionId: '00000000-0000-0000-0000-0000000000e1', detectedAt: new Date('2026-11-10T12:00:00Z'), price: 1701, groupName: 'IURI', title: 'Ryzen 7 5800X3D' },
+          { detectionId: '00000000-0000-0000-0000-0000000000e2', detectedAt: new Date('2026-11-10T15:00:00Z'), price: 1701, groupName: 'IURI', title: 'Ryzen 7 5800X3D' },
+          { detectionId: '00000000-0000-0000-0000-0000000000e3', detectedAt: new Date('2026-11-12T12:00:00Z'), price: 1800, groupName: 'RB', title: 'AMD Ryzen 7 5800X3D' },
+        ]
+      : [],
+  ),
   listen: vi.fn(async () => async () => undefined),
   closeDb: vi.fn(async () => undefined),
 }));
@@ -172,6 +195,8 @@ describe('nossoRadar API', () => {
       '/api/whatsapp/groups',
       '/api/detections',
       '/api/stats',
+      '/api/products',
+      '/api/products/c%3A5800x3d/history',
     ]) {
       const res = await app.inject({ method: 'GET', url });
       expect(res.statusCode, url).toBe(401);
@@ -376,6 +401,74 @@ describe('nossoRadar API', () => {
         since: expect.any(Date),
       }),
     );
+  });
+
+  it('GET /api/detections inclui preço e produto de cada detecção', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/detections',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect((res.json() as { items: unknown[] }).items[0]).toMatchObject({
+      price: 1701,
+      productKey: 'c:5800x3d',
+    });
+  });
+
+  it('GET /api/products lista produtos e repassa a busca', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/products?search=ryzen&limit=50',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      {
+        productKey: 'c:5800x3d',
+        title: 'Processador AMD Ryzen 7 5800X3D',
+        lastPrice: 1701,
+        lastSeenAt: now.toISOString(),
+        offers: 6,
+        minPrice: 1671,
+        medianPrice: 1718,
+      },
+    ]);
+    expect(dbMock.listProducts).toHaveBeenCalledWith({ search: 'ryzen', limit: 50 });
+  });
+
+  it('GET /api/products/:key/history traz pontos e estatísticas sem repostagens', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/products/${encodeURIComponent('c:5800x3d')}/history`,
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { title: string; points: unknown[]; stats: unknown };
+    expect(body.title).toBe('AMD Ryzen 7 5800X3D'); // título da oferta mais recente
+    expect(body.points).toHaveLength(3);
+    expect(body.stats).toEqual({ offers: 2, median: 1750.5, min: 1701, max: 1800 });
+  });
+
+  it('GET /api/products/:key/history aceita chave longa (título com muitas palavras)', async () => {
+    const longKey = `w:${Array.from({ length: 30 }, (_, i) => `palavra${i}`).join('+')}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/products/${encodeURIComponent(longKey)}/history`,
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    // Chega na rota (404 de negócio "sem histórico"), não no 404 de rota do Fastify.
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ message: 'Produto sem histórico de preço.' });
+    expect(dbMock.getProductPricePoints).toHaveBeenCalledWith(longKey);
+  });
+
+  it('GET /api/products/:key/history de produto sem histórico → 404', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/products/c%3Ainexistente/history',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('GET /api/stats retorna totais, contagem por grupo e top keywords', async () => {

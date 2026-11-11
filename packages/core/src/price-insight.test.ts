@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { priceInsight } from './index.js';
+import { distinctDailyPrices, priceInsight } from './index.js';
 
 describe('priceInsight', () => {
   it('sem histórico suficiente (< 3 ofertas anteriores) → null', () => {
@@ -39,5 +39,18 @@ describe('priceInsight', () => {
     const r = priceInsight(130, [100, 120, 80, 90, 110]);
     expect(r?.badge).toBeNull();
     expect(r?.deltaPct).toBe(30);
+  });
+});
+
+describe('distinctDailyPrices', () => {
+  it('colapsa repostagem (mesmo dia em Brasília e mesmo preço) em 1 ponto', () => {
+    const prices = distinctDailyPrices([
+      { at: new Date('2026-11-10T12:00:00Z'), price: 100 },
+      { at: new Date('2026-11-10T20:00:00Z'), price: 100 }, // repost no mesmo dia
+      { at: new Date('2026-11-10T21:00:00Z'), price: 90 }, // mesmo dia, outro preço
+      { at: new Date('2026-11-11T02:30:00Z'), price: 100 }, // ainda dia 10 em BRT
+      { at: new Date('2026-11-11T12:00:00Z'), price: 100 }, // dia 11
+    ]);
+    expect(prices.sort()).toEqual([100, 100, 90].sort());
   });
 });

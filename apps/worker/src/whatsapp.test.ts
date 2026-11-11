@@ -10,6 +10,7 @@ vi.mock('./env.js', () => ({
     TELEGRAM_CHAT_ID: '',
     WORKER_HEALTH_PORT: 3001,
     LOG_LEVEL: 'debug',
+    PUBLIC_URL: 'https://radar.test',
   },
 }));
 
@@ -255,6 +256,7 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
     expect(formatDetectionAlert).toHaveBeenCalledWith(
       expect.objectContaining({
         price: { current: 1701, insight: expect.objectContaining({ median: 1750, sampleSize: 3 }) },
+        historyUrl: 'https://radar.test/precos/c%3A5800x3d',
       }),
     );
   });

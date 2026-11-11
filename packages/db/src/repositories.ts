@@ -387,6 +387,96 @@ export async function getPreviousPrices(productKey: string, excludeId: string): 
   return rows.map((r) => r.price).filter((p): p is number => p !== null);
 }
 
+export interface ProductSummaryRow {
+  productKey: string;
+  title: string | null;
+  lastPrice: number;
+  lastSeenAt: Date;
+  offers: number;
+  minPrice: number;
+  medianPrice: number;
+}
+
+/**
+ * Produtos com histórico de preço, do visto mais recentemente ao mais antigo. Ofertas e
+ * mediana contam 1 ponto por (dia em BRT, preço), igual ao alerta (getPreviousPrices).
+ */
+export async function listProducts(
+  opts: { search?: string; limit?: number } = {},
+): Promise<ProductSummaryRow[]> {
+  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
+  // % e _ digitados são literais (escapados), não curingas do ILIKE.
+  const search = opts.search?.trim()
+    ? `%${opts.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    : null;
+  const rows = await db.execute<{
+    product_key: string;
+    product_title: string | null;
+    last_price: string;
+    last_seen_at: Date | string;
+    offers: number;
+    min_price: string;
+    median_price: string | number;
+  }>(dsql`
+    with pts as (
+      select distinct on (product_key, (detected_at at time zone 'America/Sao_Paulo')::date, price)
+        product_key, price
+      from ${detections}
+      where product_key is not null and price is not null
+    ),
+    latest as (
+      select distinct on (product_key)
+        product_key, product_title, price as last_price, detected_at as last_seen_at
+      from ${detections}
+      where product_key is not null and price is not null
+      order by product_key, detected_at desc
+    )
+    select l.product_key, l.product_title, l.last_price, l.last_seen_at,
+      count(*)::int as offers,
+      min(p.price) as min_price,
+      percentile_cont(0.5) within group (order by p.price) as median_price
+    from latest l
+    join pts p on p.product_key = l.product_key
+    where ${search}::text is null or l.product_title ilike ${search}
+    group by l.product_key, l.product_title, l.last_price, l.last_seen_at
+    order by l.last_seen_at desc
+    limit ${limit}
+  `);
+  return [...rows].map((r) => ({
+    productKey: r.product_key,
+    title: r.product_title,
+    lastPrice: Number(r.last_price),
+    lastSeenAt: new Date(r.last_seen_at),
+    offers: r.offers,
+    minPrice: Number(r.min_price),
+    medianPrice: Number(r.median_price),
+  }));
+}
+
+export interface PricePointRow {
+  detectionId: string;
+  detectedAt: Date;
+  price: number;
+  groupName: string | null;
+  title: string | null;
+}
+
+/** Todas as detecções com preço de um produto, em ordem cronológica. */
+export async function getProductPricePoints(productKey: string): Promise<PricePointRow[]> {
+  const rows = await db
+    .select({
+      detectionId: detections.id,
+      detectedAt: detections.detectedAt,
+      price: detections.price,
+      groupName: detections.groupName,
+      title: detections.productTitle,
+    })
+    .from(detections)
+    .where(and(eq(detections.productKey, productKey), isNotNull(detections.price)))
+    .orderBy(asc(detections.detectedAt));
+  return rows.flatMap((r) => (r.price === null ? [] : [{ ...r, price: r.price }]));
+}
+
 /** Detecções extraídas com versão de regra antiga (ou nunca extraídas) — para o backfill. */
 export async function listDetectionsPendingExtraction(
   version: number,
@@ -424,6 +514,8 @@ export interface DetectionRow {
   messageId: string | null;
   detectedAt: Date;
   notifiedTelegram: boolean;
+  price: number | null;
+  productKey: string | null;
 }
 
 export interface ListDetectionsFilters {

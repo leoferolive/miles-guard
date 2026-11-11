@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/conexao', label: 'Conexão', icon: '📶' },
   { to: '/grupos', label: 'Grupos Monitorados', icon: '👥' },
   { to: '/deteccoes', label: 'Detecções', icon: '🛰️' },
+  { to: '/precos', label: 'Preços', icon: '📈' },
   { to: '/conta', label: 'Conta', icon: '⚙️' },
 ] as const;
 
