@@ -11,6 +11,7 @@ import {
 import { ZodError } from 'zod';
 
 import { env } from './env.js';
+import { clientIp } from './security/client-ip.js';
 import { authPlugin } from './plugins/auth.plugin.js';
 import { metricsPlugin } from './plugins/metrics.plugin.js';
 import { staticPlugin } from './plugins/static.plugin.js';
@@ -43,7 +44,8 @@ export function buildApp(): FastifyInstance {
                   method: request.method,
                   url: redactToken(request.url),
                   host: request.headers.host ?? '',
-                  remoteAddress: request.ip,
+                  // Não request.ip: com trustProxy ele vem do X-Forwarded-For (forjável).
+                  remoteAddress: clientIp(request),
                 };
               },
             },
@@ -97,6 +99,8 @@ export function buildApp(): FastifyInstance {
     void app.register(import('@fastify/rate-limit'), {
       max: 100,
       timeWindow: '1 minute',
+      // Chave pelo IP real (CF-Connecting-IP), não request.ip (X-Forwarded-For forjável).
+      keyGenerator: clientIp,
       // Probes e scrape de métricas não devem consumir o orçamento de rate-limit.
       allowList: (req) => req.url === '/healthz' || req.url === '/metrics',
     });

@@ -150,3 +150,148 @@ describe('rate-limit estrito em /api/auth/login', () => {
     await app.close();
   });
 });
+
+describe('rate-limit do login não é burlável por X-Forwarded-For (achado de segurança)', () => {
+  async function buildLimitedApp() {
+    const Fastify = (await import('fastify')).default;
+    const { authRoutes } = await import('./routes/auth.routes.js');
+    const { authPlugin } = await import('./plugins/auth.plugin.js');
+
+    // Mesmo trustProxy do app real: é ele que tornava request.ip forjável.
+    const app = Fastify({ trustProxy: true });
+    await app.register(import('@fastify/rate-limit'), { global: false });
+    await app.register(authPlugin);
+    await app.register(authRoutes, { prefix: '/api' });
+    await app.ready();
+    return app;
+  }
+
+  function login(app: Awaited<ReturnType<typeof buildLimitedApp>>, headers: Record<string, string>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers,
+      payload: { email: 'dono@example.com', password: 'senha-errada' },
+    });
+  }
+
+  it('trocar o X-Forwarded-For a cada tentativa não escapa do limite', async () => {
+    const app = await buildLimitedApp();
+    const statuses: number[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      const res = await login(app, { 'x-forwarded-for': `203.0.113.${i + 1}` });
+      statuses.push(res.statusCode);
+    }
+    expect(statuses.slice(5).every((s) => s === 429)).toBe(true);
+    await app.close();
+  });
+
+  it('usa o CF-Connecting-IP (definido pelo Cloudflare) como identidade do cliente', async () => {
+    const app = await buildLimitedApp();
+    for (let i = 0; i < 6; i += 1) {
+      await login(app, { 'cf-connecting-ip': '198.51.100.1', 'x-forwarded-for': `10.0.0.${i}` });
+    }
+    const sameClient = await login(app, { 'cf-connecting-ip': '198.51.100.1' });
+    const otherClient = await login(app, { 'cf-connecting-ip': '198.51.100.2' });
+
+    expect(sameClient.statusCode).toBe(429);
+    expect(otherClient.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('trava global de falhas de login (independe do IP)', () => {
+  it('após o máximo de falhas na janela, bloqueia (429) inclusive a senha correta', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { authRoutes } = await import('./routes/auth.routes.js');
+    const { authPlugin } = await import('./plugins/auth.plugin.js');
+
+    const app = Fastify();
+    await app.register(authPlugin);
+    await app.register(authRoutes, {
+      prefix: '/api',
+      loginFailureLimit: { maxFailures: 3, windowMs: 60_000 },
+    });
+    await app.ready();
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'cf-connecting-ip': `198.51.100.${i + 1}` },
+        payload: { email: 'dono@example.com', password: 'senha-errada' },
+      });
+      expect(res.statusCode).toBe(401);
+    }
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: { 'cf-connecting-ip': '198.51.100.99' },
+      payload: { email: 'dono@example.com', password: 'senha-correta' },
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect(upsertUser).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('tentativas em paralelo não furam a trava (reserva antes do bcrypt)', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { authRoutes } = await import('./routes/auth.routes.js');
+    const { authPlugin } = await import('./plugins/auth.plugin.js');
+
+    const app = Fastify();
+    await app.register(authPlugin);
+    await app.register(authRoutes, {
+      prefix: '/api',
+      loginFailureLimit: { maxFailures: 3, windowMs: 60_000 },
+    });
+    await app.ready();
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/auth/login',
+          headers: { 'cf-connecting-ip': `198.51.100.${i + 1}` },
+          payload: {
+            email: 'dono@example.com',
+            password: i === 19 ? 'senha-correta' : 'senha-errada',
+          },
+        }),
+      ),
+    );
+    const statuses = results.map((r) => r.statusCode);
+
+    expect(statuses.filter((s) => s === 401)).toHaveLength(3);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(17);
+    expect(upsertUser).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('body malformado não conta na trava (não é palpite de senha)', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { authRoutes } = await import('./routes/auth.routes.js');
+    const { authPlugin } = await import('./plugins/auth.plugin.js');
+
+    const app = Fastify();
+    await app.register(authPlugin);
+    await app.register(authRoutes, {
+      prefix: '/api',
+      loginFailureLimit: { maxFailures: 1, windowMs: 60_000 },
+    });
+    await app.ready();
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: {} });
+      expect(res.statusCode).toBe(401);
+    }
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'dono@example.com', password: 'senha-correta' },
+    });
+    expect(ok.statusCode).toBe(200);
+    await app.close();
+  });
+});

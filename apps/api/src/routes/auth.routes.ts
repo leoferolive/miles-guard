@@ -5,6 +5,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../env.js';
+import { clientIp } from '../security/client-ip.js';
+import { LoginFailureGuard, type LoginFailureGuardOptions } from '../security/login-failure-guard.js';
 
 /** Body do login: e-mail + senha (ADR-0007). Trim do e-mail antes de validar. */
 const loginBodySchema = z.object({
@@ -15,7 +17,19 @@ const loginBodySchema = z.object({
 /** Mensagem genérica de 401 — NÃO revela qual campo falhou (anti-enumeração). */
 const INVALID_CREDENTIALS = 'Credenciais inválidas.';
 
-export const authRoutes: FastifyPluginAsync = async (fastify) => {
+/** Default da trava global: 20 falhas em 15 min (de qualquer IP) travam o login. */
+const DEFAULT_LOGIN_FAILURE_LIMIT: LoginFailureGuardOptions = {
+  maxFailures: 20,
+  windowMs: 15 * 60 * 1000,
+};
+
+export interface AuthRoutesOptions {
+  loginFailureLimit?: LoginFailureGuardOptions;
+}
+
+export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify, opts) => {
+  const loginGuard = new LoginFailureGuard(opts.loginFailureLimit ?? DEFAULT_LOGIN_FAILURE_LIMIT);
+
   /**
    * POST /api/auth/login (ADR-0007): valida e-mail (== AUTH_EMAIL) + senha
    * (bcrypt.compare contra AUTH_PASSWORD_HASH). Em sucesso: upsert do Usuário,
@@ -23,7 +37,9 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
    * Em qualquer falha: 401 genérico (não revela se foi e-mail ou senha).
    *
    * Rate-limit estrito por-rota contra brute force (além do limite global):
-   * 5 tentativas / minuto por IP. Sem efeito em testes (plugin global desabilitado).
+   * 5 tentativas / minuto por IP real do cliente (clientIp: CF-Connecting-IP, nunca
+   * X-Forwarded-For). Sem efeito em testes (plugin global desabilitado). Além disso,
+   * uma trava GLOBAL (LoginFailureGuard) barra brute force distribuído entre IPs.
    */
   fastify.post(
     '/auth/login',
@@ -32,17 +48,28 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         rateLimit: {
           max: 5,
           timeWindow: '1 minute',
+          keyGenerator: clientIp,
         },
       },
     },
     async (request, reply) => {
       const parsed = loginBodySchema.safeParse(request.body);
       if (!parsed.success) {
-        // Body malformado também vira 401 genérico (sem vazar a forma esperada).
+        // Body malformado também vira 401 genérico (sem vazar a forma esperada). Não
+        // conta na trava global: não é palpite de senha (e travaria o login de graça).
         return reply.code(401).send({ message: INVALID_CREDENTIALS });
       }
 
       const email = parsed.data.email.trim().toLowerCase();
+
+      // Reserva a vaga ANTES do bcrypt: tentativas simultâneas não furam a trava.
+      const attempt = loginGuard.tryAcquire();
+      if (!attempt) {
+        request.log.warn({ ip: clientIp(request) }, 'login bloqueado: trava global de falhas');
+        return reply
+          .code(429)
+          .send({ message: 'Muitas tentativas de login. Tente novamente mais tarde.' });
+      }
 
       // Comparamos a senha SEMPRE (mesmo com e-mail errado) para não dar pista de
       // timing sobre qual e-mail existe. O resultado só importa se o e-mail casa.
@@ -50,9 +77,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       const emailOk = email === env.AUTH_EMAIL;
 
       if (!emailOk || !passwordOk) {
-        request.log.warn({ email }, 'login negado: credenciais inválidas');
+        request.log.warn({ email, ip: clientIp(request) }, 'login negado: credenciais inválidas');
         return reply.code(401).send({ message: INVALID_CREDENTIALS });
       }
+
+      // Login ok: a tentativa não conta como falha.
+      loginGuard.release(attempt);
 
       const user = await upsertUser({
         email,
