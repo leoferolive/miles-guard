@@ -89,9 +89,13 @@ export function formatDetectionAlert(alert: DetectionAlert): string {
   text += `🕐 *Hora:* ${alert.time}\n`;
   if (alert.matchedKeywords.length > 0) text += `🔍 *Palavras-chave:* ${tags}\n`;
   if (alert.price?.insight) text += formatPriceInsight(alert.price.insight);
-  // URL crua (sem [texto](url)): a chave vai percent-encoded e não tem "_" nem "*".
+  // URL crua (sem [texto](url)). A chave do produto só tem [a-z0-9.:+-] (ver
+  // productKeyFromTitle) — sem "_"/"*" que quebrariam o Markdown.
   if (alert.historyUrl) text += `📈 Histórico: ${alert.historyUrl}\n`;
-  const raw = alert.text.length > 1000 ? `${alert.text.slice(0, 1000)}\n...` : alert.text;
+  // Corte por code point (Array.from): .slice por UTF-16 partia emoji ao meio e o
+  // Telegram rejeitava o texto inválido — outro jeito de perder o alerta.
+  const chars = Array.from(alert.text);
+  const raw = chars.length > 1000 ? `${chars.slice(0, 1000).join('')}\n...` : alert.text;
   // ``` dentro da mensagem fecharia o bloco de código antes da hora.
   const body = raw.replace(/```/g, "'''");
   text += `\n💬 *Mensagem:*\n\`\`\`\n${body}\n\`\`\``;

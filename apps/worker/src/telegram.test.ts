@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
+import {
+  formatAlertTime,
+  formatDetectionAlert,
+  markdownToPlainText,
+  TelegramNotifier,
+} from './telegram.js';
 
 describe('formatDetectionAlert', () => {
   it('monta o alerta com grupo, keywords e corpo', () => {
@@ -48,6 +53,32 @@ describe('formatDetectionAlert — Markdown seguro (alertas com "Odyssey OLED" n
     expect(out).toContain('bot\\_\\*ofertas\\*\\`');
     expect(unescapedOutsideCode(out, '_')).toBe(0);
     expect(unescapedOutsideCode(out, '[')).toBe(0);
+  });
+
+  it('corte em 1000 caracteres não parte emoji ao meio (texto inválido → 400)', () => {
+    const out = formatDetectionAlert({
+      groupName: 'G',
+      sender: null,
+      text: `${'a'.repeat(999)}🔥🔥`,
+      matchedKeywords: ['x'],
+      time: '10/11 16:11:50',
+    });
+    expect(out).toContain(`${'a'.repeat(999)}🔥\n...`);
+    expect(out.isWellFormed()).toBe(true);
+  });
+
+  it('fallback em texto puro remove os escapes de um alerta real', () => {
+    const out = formatDetectionAlert({
+      groupName: 'promo_tech',
+      sender: null,
+      text: 'x',
+      matchedKeywords: ['Odyssey OLED'],
+      time: '10/11 16:11:50',
+    });
+    const plain = markdownToPlainText(out);
+    expect(plain).toContain('Grupo: promo_tech');
+    expect(plain).toContain('#Odyssey_OLED');
+    expect(plain).not.toContain('\\');
   });
 
   it('``` no corpo da mensagem não fecha o bloco de código antes da hora', () => {
