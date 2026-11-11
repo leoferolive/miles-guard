@@ -17,6 +17,54 @@ describe('formatDetectionAlert', () => {
   });
 });
 
+describe('formatDetectionAlert — histórico de preço', () => {
+  const base = {
+    groupName: 'IURI',
+    sender: 'Iuri',
+    text: 'Ryzen 7 5800X3D',
+    matchedKeywords: ['x3d'],
+    time: '10/11 16:11:50',
+  };
+
+  it('mostra a mediana, quantas ofertas e quanto está abaixo', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1701, insight: { median: 1750, sampleSize: 12, deltaPct: -2.8, badge: null } },
+    });
+    expect(out).toContain('📊 *Mediana:* R$\u00a01.750 (12 ofertas) · 2,8% abaixo');
+    expect(out).not.toContain('🏆');
+  });
+
+  it('acima da mediana', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1969, insight: { median: 1750, sampleSize: 12, deltaPct: 12.5, badge: null } },
+    });
+    expect(out).toContain('12,5% acima');
+  });
+
+  it('marca o menor preço já visto', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1600, insight: { median: 1750, sampleSize: 12, deltaPct: -8.6, badge: 'lowest' } },
+    });
+    expect(out).toContain('🏆 *Menor preço já visto!*');
+  });
+
+  it('marca "entre os menores"', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1680, insight: { median: 1750, sampleSize: 12, deltaPct: -4, badge: 'among_lowest' } },
+    });
+    expect(out).toContain('📉 *Entre os menores preços*');
+  });
+
+  it('sem histórico suficiente: não mostra nada de preço', () => {
+    const out = formatDetectionAlert({ ...base, price: { current: 1701, insight: null } });
+    expect(out).not.toContain('Mediana');
+  });
+});
+
 describe('formatAlertTime', () => {
   it('formata em horário de Brasília com data, independente do fuso do processo', () => {
     // 19:11:50 UTC = 16:11:50 em America/Sao_Paulo (UTC-3, sem horário de verão).

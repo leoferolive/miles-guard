@@ -4,7 +4,9 @@ import {
   check,
   index,
   integer,
+  numeric,
   pgTable,
+  smallint,
   text,
   timestamp,
   unique,
@@ -73,10 +75,20 @@ export const detections = pgTable(
     messageTimestamp: timestamp('message_timestamp', { withTimezone: true }),
     detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
     notifiedTelegram: boolean('notified_telegram').notNull().default(false),
+    // --- Histórico de preço (derivado do texto por @nossoradar/core extractOffer) ---
+    /** Preço final da oferta em R$ (null se ausente/ambíguo). */
+    price: numeric('price', { precision: 12, scale: 2, mode: 'number' }),
+    /** Identidade do produto (`c:…` códigos de modelo / `w:…` palavras). null = não agrupa. */
+    productKey: text('product_key'),
+    productTitle: text('product_title'),
+    /** OFFER_EXTRACTION_VERSION usada; abaixo da atual = reprocessar (backfill no boot do worker). */
+    extractionVersion: smallint('extraction_version').notNull().default(0),
   },
   (t) => [
     index('detections_detected_at_idx').on(t.detectedAt),
     index('detections_group_jid_idx').on(t.groupJid),
+    index('detections_product_key_idx').on(t.productKey, t.detectedAt),
+    index('detections_extraction_version_idx').on(t.extractionVersion),
   ],
 );
 

@@ -1,6 +1,7 @@
 import { closeDb, listen } from '@nossoradar/db';
 import { NOTIFY_CHANNELS } from '@nossoradar/shared';
 
+import { backfillOfferExtraction } from './backfill.js';
 import { env } from './env.js';
 import { startHealthServer } from './health-server.js';
 import { WhatsAppWorker } from './whatsapp.js';
@@ -31,6 +32,14 @@ async function main(): Promise<void> {
   });
 
   await worker.connect();
+
+  // Histórico de preço: extrai preço/produto das detecções antigas (em segundo plano;
+  // não bloqueia a conexão nem os alertas).
+  void backfillOfferExtraction()
+    .then((n) => {
+      if (n > 0) console.log(`[worker] histórico de preço: ${n} detecção(ões) reprocessada(s).`);
+    })
+    .catch((err: unknown) => console.error('[worker] backfill do histórico de preço falhou:', err));
 
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
