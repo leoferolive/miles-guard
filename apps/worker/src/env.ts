@@ -11,4 +11,6 @@ export const env = {
   // Nível de log: 'debug' habilita logs por-mensagem de baixo volume (no_match/dedup);
   // 'info' (padrão) mantém só detecções e o WARN de no_text (formato não mapeado).
   LOG_LEVEL: (process.env.LOG_LEVEL ?? 'info').toLowerCase(),
+  // URL pública do Painel (configmap compartilhado): vira o link "📈 Histórico" do alerta.
+  PUBLIC_URL: (process.env.PUBLIC_URL ?? '').replace(/\/+$/, ''),
 } as const;

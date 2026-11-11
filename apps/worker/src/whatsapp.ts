@@ -381,8 +381,20 @@ export class WhatsAppWorker {
       offer.price !== null
         ? { current: offer.price, insight: await this.loadPriceInsight(offer.price, offer.productKey, detectionId) }
         : undefined;
+    const historyUrl =
+      env.PUBLIC_URL && offer.productKey && offer.price !== null
+        ? `${env.PUBLIC_URL}/precos/${encodeURIComponent(offer.productKey)}`
+        : undefined;
     this.telegram.enqueue(
-      formatDetectionAlert({ groupName: monitored.name, sender, text, matchedKeywords: matched, time, price }),
+      formatDetectionAlert({
+        groupName: monitored.name,
+        sender,
+        text,
+        matchedKeywords: matched,
+        time,
+        price,
+        historyUrl,
+      }),
       () => {
         void markDetectionNotified(detectionId);
       },

@@ -58,8 +58,55 @@ export const detectionSchema = z.object({
   messageId: z.string().nullable(),
   detectedAt: z.string().datetime(),
   notifiedTelegram: z.boolean(),
+  /** Preço/produto extraídos do texto (null se não identificados). */
+  price: z.number().nullable(),
+  productKey: z.string().nullable(),
 });
 export type Detection = z.infer<typeof detectionSchema>;
+
+// --- Histórico de preço por produto ---
+export const productSummarySchema = z.object({
+  productKey: z.string(),
+  /** Título da oferta mais recente do produto. */
+  title: z.string().nullable(),
+  lastPrice: z.number(),
+  lastSeenAt: z.string().datetime(),
+  /** Ofertas distintas (1 por dia+preço — repostagens não contam). */
+  offers: z.number().int().nonnegative(),
+  minPrice: z.number(),
+  medianPrice: z.number(),
+});
+export type ProductSummary = z.infer<typeof productSummarySchema>;
+
+export const pricePointSchema = z.object({
+  detectionId: z.string().uuid(),
+  detectedAt: z.string().datetime(),
+  price: z.number(),
+  groupName: z.string().nullable(),
+  title: z.string().nullable(),
+});
+export type PricePoint = z.infer<typeof pricePointSchema>;
+
+export const productHistorySchema = z.object({
+  productKey: z.string(),
+  title: z.string().nullable(),
+  /** Todas as detecções com preço, em ordem cronológica (inclui repostagens). */
+  points: z.array(pricePointSchema),
+  /** Estatísticas sobre as ofertas distintas (1 por dia+preço), como no alerta. */
+  stats: z.object({
+    offers: z.number().int().nonnegative(),
+    median: z.number(),
+    min: z.number(),
+    max: z.number(),
+  }),
+});
+export type ProductHistory = z.infer<typeof productHistorySchema>;
+
+export const listProductsQuery = z.object({
+  search: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().positive().max(500).optional(),
+});
+export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
 // --- Usuário autenticado (single-user; ADR-0005) ---
 export const authUserSchema = z.object({

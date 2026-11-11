@@ -35,6 +35,14 @@ describe('formatDetectionAlert — histórico de preço', () => {
     expect(out).not.toContain('🏆');
   });
 
+  it('mediana com centavos sai com 2 casas (R$ 1.709,50)', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1701, insight: { median: 1709.5, sampleSize: 4, deltaPct: -0.5, badge: null } },
+    });
+    expect(out).toContain('R$\u00a01.709,50');
+  });
+
   it('acima da mediana', () => {
     const out = formatDetectionAlert({
       ...base,
@@ -57,6 +65,15 @@ describe('formatDetectionAlert — histórico de preço', () => {
       price: { current: 1680, insight: { median: 1750, sampleSize: 12, deltaPct: -4, badge: 'among_lowest' } },
     });
     expect(out).toContain('📉 *Entre os menores preços*');
+  });
+
+  it('inclui o link do histórico no Painel quando informado', () => {
+    const out = formatDetectionAlert({
+      ...base,
+      price: { current: 1701, insight: null },
+      historyUrl: 'https://nossoradar.example/precos/c%3A5800x3d',
+    });
+    expect(out).toContain('📈 Histórico: https://nossoradar.example/precos/c%3A5800x3d');
   });
 
   it('sem histórico suficiente: não mostra nada de preço', () => {

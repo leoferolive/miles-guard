@@ -8,6 +8,8 @@ import { ContaPage } from '@/pages/conta-page';
 import { DeteccoesPage } from '@/pages/deteccoes-page';
 import { GruposPage } from '@/pages/grupos-page';
 import { LoginPage } from '@/pages/login-page';
+import { PrecosPage } from '@/pages/precos-page';
+import { ProdutoPage } from '@/pages/produto-page';
 
 export function App() {
   return (
@@ -38,6 +40,22 @@ export function App() {
               element={
                 <ProtectedRoute>
                   <DeteccoesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/precos"
+              element={
+                <ProtectedRoute>
+                  <PrecosPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/precos/:productKey"
+              element={
+                <ProtectedRoute>
+                  <ProdutoPage />
                 </ProtectedRoute>
               }
             />

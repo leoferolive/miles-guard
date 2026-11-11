@@ -13,6 +13,8 @@ function serializeDetection(d: DetectionRow): Record<string, unknown> {
     messageId: d.messageId,
     detectedAt: d.detectedAt.toISOString(),
     notifiedTelegram: d.notifiedTelegram,
+    price: d.price,
+    productKey: d.productKey,
   };
 }
 

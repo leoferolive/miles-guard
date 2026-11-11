@@ -4,6 +4,8 @@ import type {
   Detection,
   MonitoredGroup,
   Keyword,
+  ProductHistory,
+  ProductSummary,
   Stats,
   WhatsappGroup,
   ListDetectionsQuery,
@@ -98,4 +100,12 @@ export const radarService = {
   listDetections: (query: ListDetectionsQuery = {}): Promise<DetectionsPage> =>
     apiClient.get<DetectionsPage>(`/api/detections${buildDetectionsQuery(query)}`),
   getStats: (): Promise<Stats> => apiClient.get<Stats>('/api/stats'),
+
+  // --- Histórico de preço ---
+  listProducts: (search?: string): Promise<ProductSummary[]> =>
+    apiClient.get<ProductSummary[]>(
+      `/api/products${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+    ),
+  getProductHistory: (productKey: string): Promise<ProductHistory> =>
+    apiClient.get<ProductHistory>(`/api/products/${encodeURIComponent(productKey)}/history`),
 };
