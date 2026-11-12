@@ -65,6 +65,58 @@ describe('DeteccoesPage — categoria', () => {
     expect(tags).toEqual(['Processador']);
   });
 
+  it('trocar a categoria estando na página 2 volta para a primeira página', async () => {
+    listDetectionsMock.mockResolvedValue({
+      items: [detection('d1', 'Processador', 'Ryzen 7 5800X3D')],
+      total: 45,
+      limit: 20,
+      offset: 0,
+    });
+    const user = userEvent.setup();
+    render(<DeteccoesPage />, { wrapper: MemoryRouter });
+    await screen.findByRole('option', { name: 'Monitor' });
+
+    await user.click(screen.getByRole('button', { name: /Próxima/ }));
+    await waitFor(() =>
+      expect(listDetectionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 20 })),
+    );
+
+    await user.selectOptions(screen.getByLabelText('Categoria'), 'Monitor');
+    await waitFor(() =>
+      expect(listDetectionsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: 'Monitor', offset: 0 }),
+      ),
+    );
+  });
+
+  it('resposta antiga não sobrescreve um filtro mais novo (corrida)', async () => {
+    let resolveSlow: (v: unknown) => void = () => undefined;
+    listDetectionsMock.mockImplementation((q: { category?: string }) =>
+      q.category === 'Processador'
+        ? new Promise((r) => {
+            resolveSlow = r;
+          })
+        : Promise.resolve({
+            items: [detection('m1', 'Monitor', 'Monitor rápido')],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          }),
+    );
+    const user = userEvent.setup();
+    render(<DeteccoesPage />, { wrapper: MemoryRouter });
+    await screen.findByRole('option', { name: 'Monitor' });
+
+    await user.selectOptions(screen.getByLabelText('Categoria'), 'Processador');
+    await user.selectOptions(screen.getByLabelText('Categoria'), 'Monitor');
+    await screen.findByText('Monitor rápido');
+
+    resolveSlow({ items: [detection('p1', 'Processador', 'Ryzen lento')], total: 1, limit: 20, offset: 0 });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('Ryzen lento')).toBeNull();
+    expect(screen.getByText('Monitor rápido')).toBeTruthy();
+  });
+
   it('filtro de categoria repassa a categoria à listagem', async () => {
     const user = userEvent.setup();
     render(<DeteccoesPage />, { wrapper: MemoryRouter });

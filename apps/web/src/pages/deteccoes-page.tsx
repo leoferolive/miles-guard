@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -39,7 +39,12 @@ export const DeteccoesPage = () => {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  // Só a requisição mais recente pode atualizar a tela: trocar filtros rápido não deixa
+  // uma resposta atrasada sobrescrever o filtro atual.
+  const requestSeq = useRef(0);
+
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     try {
       const result = await radarService.listDetections({
         limit: PAGE_SIZE,
@@ -49,9 +54,11 @@ export const DeteccoesPage = () => {
         category: filters.category || undefined,
         since: filters.since ? new Date(filters.since).toISOString() : undefined,
       });
+      if (seq !== requestSeq.current) return;
       setPage(result);
       setError(null);
     } catch {
+      if (seq !== requestSeq.current) return;
       setError('Falha ao carregar as Detecções.');
     }
     // reloadTick entra nas deps de propósito: força refetch mesmo sem mudar offset/filters.
@@ -174,7 +181,12 @@ export const DeteccoesPage = () => {
               id="f-group"
               className="select"
               value={filters.groupJid}
-              onChange={(e) => setFilters((f) => ({ ...f, groupJid: e.target.value }))}
+              onChange={(e) => {
+                // Selects buscam na hora: voltar à 1ª página (senão o offset antigo
+                // pode cair além do total filtrado e mostrar "nenhuma Detecção").
+                setFilters((f) => ({ ...f, groupJid: e.target.value }));
+                setOffset(0);
+              }}
             >
               <option value="">Todos</option>
               {groups.map((g) => (
@@ -200,7 +212,10 @@ export const DeteccoesPage = () => {
               id="f-category"
               className="select"
               value={filters.category}
-              onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
+              onChange={(e) => {
+                setFilters((f) => ({ ...f, category: e.target.value }));
+                setOffset(0);
+              }}
             >
               <option value="">Todas</option>
               {categories.map((c) => (
