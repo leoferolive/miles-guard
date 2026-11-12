@@ -46,6 +46,7 @@ function buildDetectionsQuery(query: ListDetectionsQuery = {}): string {
   if (query.offset != null) params.set('offset', String(query.offset));
   if (query.groupJid) params.set('groupJid', query.groupJid);
   if (query.keyword) params.set('keyword', query.keyword);
+  if (query.category) params.set('category', query.category);
   if (query.since) params.set('since', query.since);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
@@ -85,8 +86,14 @@ export const radarService = {
   setGroupEnabled: (id: string, enabled: boolean): Promise<MonitoredGroup> =>
     apiClient.patch<MonitoredGroup>(`/api/groups/${id}`, { enabled }),
   deleteGroup: (id: string): Promise<void> => apiClient.delete<void>(`/api/groups/${id}`),
-  addKeyword: (groupId: string, term: string): Promise<Keyword> =>
-    apiClient.post<Keyword>(`/api/groups/${groupId}/keywords`, { term }),
+  /** `categories` vazio = a Palavra-chave vale para qualquer categoria. */
+  addKeyword: (groupId: string, term: string, categories: string[] = []): Promise<Keyword> =>
+    apiClient.post<Keyword>(`/api/groups/${groupId}/keywords`, { term, categories }),
+  /** Define em quais categorias a Palavra-chave vale ([] = qualquer). */
+  updateKeywordCategories: (keywordId: string, categories: string[]): Promise<Keyword> =>
+    apiClient.patch<Keyword>(`/api/keywords/${keywordId}`, { categories }),
+  /** Categorias de produto possíveis, na ordem de exibição (a última é "Outros"). */
+  listCategories: (): Promise<string[]> => apiClient.get<string[]>('/api/categories'),
   deleteKeyword: (keywordId: string): Promise<void> =>
     apiClient.delete<void>(`/api/keywords/${keywordId}`),
 
@@ -102,10 +109,15 @@ export const radarService = {
   getStats: (): Promise<Stats> => apiClient.get<Stats>('/api/stats'),
 
   // --- Histórico de preço ---
-  listProducts: (search?: string): Promise<ProductSummary[]> =>
-    apiClient.get<ProductSummary[]>(
-      `/api/products${search ? `?search=${encodeURIComponent(search)}` : ''}`,
-    ),
+  listProducts: (
+    filters: { search?: string; category?: string } = {},
+  ): Promise<ProductSummary[]> => {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.category) params.set('category', filters.category);
+    const qs = params.toString();
+    return apiClient.get<ProductSummary[]>(`/api/products${qs ? `?${qs}` : ''}`);
+  },
   getProductHistory: (productKey: string): Promise<ProductHistory> =>
     apiClient.get<ProductHistory>(`/api/products/${encodeURIComponent(productKey)}/history`),
 };

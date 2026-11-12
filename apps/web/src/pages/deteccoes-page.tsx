@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -10,6 +10,7 @@ import {
 
 import { AppShell } from '@/components/app-shell';
 import { useRealtime } from '@/hooks/use-realtime';
+import { visibleCategory } from '@/lib/category';
 import { formatBRL, productPath } from '@/lib/format';
 import { radarService, type DetectionsPage } from '@/services/radar.service';
 
@@ -18,10 +19,11 @@ const PAGE_SIZE = 20;
 interface Filters {
   groupJid: string;
   keyword: string;
+  category: string;
   since: string;
 }
 
-const EMPTY_FILTERS: Filters = { groupJid: '', keyword: '', since: '' };
+const EMPTY_FILTERS: Filters = { groupJid: '', keyword: '', category: '', since: '' };
 
 /** Tela Detecções: feed ao vivo + histórico filtrável + painel de estatísticas. */
 export const DeteccoesPage = () => {
@@ -33,21 +35,30 @@ export const DeteccoesPage = () => {
   const [reloadTick, setReloadTick] = useState(0);
   const [stats, setStats] = useState<Stats | null>(null);
   const [groups, setGroups] = useState<MonitoredGroup[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  // Só a requisição mais recente pode atualizar a tela: trocar filtros rápido não deixa
+  // uma resposta atrasada sobrescrever o filtro atual.
+  const requestSeq = useRef(0);
+
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     try {
       const result = await radarService.listDetections({
         limit: PAGE_SIZE,
         offset,
         groupJid: filters.groupJid || undefined,
         keyword: filters.keyword || undefined,
+        category: filters.category || undefined,
         since: filters.since ? new Date(filters.since).toISOString() : undefined,
       });
+      if (seq !== requestSeq.current) return;
       setPage(result);
       setError(null);
     } catch {
+      if (seq !== requestSeq.current) return;
       setError('Falha ao carregar as Detecções.');
     }
     // reloadTick entra nas deps de propósito: força refetch mesmo sem mudar offset/filters.
@@ -71,6 +82,10 @@ export const DeteccoesPage = () => {
     radarService
       .listGroups()
       .then(setGroups)
+      .catch(() => {});
+    radarService
+      .listCategories()
+      .then(setCategories)
       .catch(() => {});
   }, [loadStats]);
 
@@ -166,7 +181,12 @@ export const DeteccoesPage = () => {
               id="f-group"
               className="select"
               value={filters.groupJid}
-              onChange={(e) => setFilters((f) => ({ ...f, groupJid: e.target.value }))}
+              onChange={(e) => {
+                // Selects buscam na hora: voltar à 1ª página (senão o offset antigo
+                // pode cair além do total filtrado e mostrar "nenhuma Detecção").
+                setFilters((f) => ({ ...f, groupJid: e.target.value }));
+                setOffset(0);
+              }}
             >
               <option value="">Todos</option>
               {groups.map((g) => (
@@ -185,6 +205,25 @@ export const DeteccoesPage = () => {
               value={filters.keyword}
               onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
             />
+          </div>
+          <div>
+            <label htmlFor="f-category">Categoria</label>
+            <select
+              id="f-category"
+              className="select"
+              value={filters.category}
+              onChange={(e) => {
+                setFilters((f) => ({ ...f, category: e.target.value }));
+                setOffset(0);
+              }}
+            >
+              <option value="">Todas</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="f-since">A partir de</label>
@@ -252,29 +291,39 @@ interface DetectionItemProps {
   isNew: boolean;
 }
 
-const DetectionItem = ({ detection, isNew }: DetectionItemProps) => (
-  <article className={`detection${isNew ? ' new' : ''}`}>
-    <div className="detection-head">
-      <strong>{detection.groupName ?? detection.groupJid}</strong>
-      <div className="chips">
-        {detection.matchedKeywords.map((kw) => (
-          <span key={kw} className="kw-tag">
-            {kw}
-          </span>
-        ))}
+const DetectionItem = ({ detection, isNew }: DetectionItemProps) => {
+  const category = visibleCategory(detection.category);
+  return (
+    <article className={`detection${isNew ? ' new' : ''}`}>
+      <div className="detection-head">
+        <strong>{detection.groupName ?? detection.groupJid}</strong>
+        <div className="chips">
+          {detection.matchedKeywords.map((kw) => (
+            <span key={kw} className="kw-tag">
+              {kw}
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
-    <p className="detection-text">{detection.messageText}</p>
-    <div className="detection-meta">
-      {detection.sender && <span>{detection.sender}</span>}
-      <span>{new Date(detection.detectedAt).toLocaleString('pt-BR')}</span>
-      <span>{detection.notifiedTelegram ? '✓ Telegram' : '○ não notificado'}</span>
-      {detection.price !== null && <span className="price-tag">{formatBRL(detection.price)}</span>}
-      {detection.productKey && detection.price !== null && (
-        <Link className="history-link" to={productPath(detection.productKey)}>
-          📈 Histórico
-        </Link>
-      )}
-    </div>
-  </article>
-);
+      <p className="detection-text">{detection.messageText}</p>
+      <div className="detection-meta">
+        {category && (
+          <span className="cat-tag" title="Categoria do produto">
+            {category}
+          </span>
+        )}
+        {detection.sender && <span>{detection.sender}</span>}
+        <span>{new Date(detection.detectedAt).toLocaleString('pt-BR')}</span>
+        <span>{detection.notifiedTelegram ? '✓ Telegram' : '○ não notificado'}</span>
+        {detection.price !== null && (
+          <span className="price-tag">{formatBRL(detection.price)}</span>
+        )}
+        {detection.productKey && detection.price !== null && (
+          <Link className="history-link" to={productPath(detection.productKey)}>
+            📈 Histórico
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+};
