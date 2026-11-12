@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { ProductSummary } from '@nossoradar/shared';
 
 import { AppShell } from '@/components/app-shell';
+import { visibleCategory } from '@/lib/category';
 import { deltaPct, formatBRL, formatShortDate, productPath } from '@/lib/format';
 import { radarService } from '@/services/radar.service';
 
@@ -12,12 +13,21 @@ export const PrecosPage = () => {
   const [products, setProducts] = useState<ProductSummary[] | null>(null);
   const [search, setSearch] = useState('');
   const [applied, setApplied] = useState('');
+  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    radarService
+      .listCategories()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     radarService
-      .listProducts(applied || undefined)
+      .listProducts({ search: applied || undefined, category: category || undefined })
       .then((list) => {
         if (!cancelled) {
           setProducts(list);
@@ -30,7 +40,7 @@ export const PrecosPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [applied]);
+  }, [applied, category]);
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -42,7 +52,7 @@ export const PrecosPage = () => {
       {error && <div className="error-banner">{error}</div>}
 
       <form className="card" onSubmit={onSearch}>
-        <div className="filters">
+        <div className="filters price-filters">
           <input
             className="input"
             type="search"
@@ -51,6 +61,19 @@ export const PrecosPage = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select
+            className="select"
+            aria-label="Categoria"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="">Todas as categorias</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="btn btn-primary">
             Buscar
           </button>
@@ -60,7 +83,11 @@ export const PrecosPage = () => {
       {products === null ? (
         <div className="empty">Carregando…</div>
       ) : products.length === 0 ? (
-        <div className="empty">Nenhum produto com histórico de preço ainda.</div>
+        <div className="empty">
+          {applied || category
+            ? 'Nenhum produto encontrado para os filtros atuais.'
+            : 'Nenhum produto com histórico de preço ainda.'}
+        </div>
       ) : (
         <div className="card product-list">
           <table className="product-table">
@@ -79,10 +106,12 @@ export const PrecosPage = () => {
               {products.map((p) => {
                 const delta = deltaPct(p.lastPrice, p.medianPrice);
                 const isLowest = p.offers >= 2 && p.lastPrice <= p.minPrice;
+                const cat = visibleCategory(p.category);
                 return (
                   <tr key={p.productKey}>
                     <td className="product-title">
                       <Link to={productPath(p.productKey)}>{p.title ?? p.productKey}</Link>
+                      {cat && <span className="cat-tag">{cat}</span>}
                     </td>
                     <td className="num">
                       {formatBRL(p.lastPrice)}
