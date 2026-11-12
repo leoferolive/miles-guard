@@ -61,6 +61,13 @@ describe('PrecosPage', () => {
     expect(container.querySelector('.cat-tag')).toBeNull();
   });
 
+  it('filtro de categoria não oferece Kit (kits não entram no histórico de preço)', async () => {
+    listProductsMock.mockResolvedValue([]);
+    render(<PrecosPage />, { wrapper: MemoryRouter });
+    await screen.findByRole('option', { name: 'Monitor' });
+    expect(screen.queryByRole('option', { name: 'Kit' })).toBeNull();
+  });
+
   it('filtro de categoria repassa a categoria ao serviço (junto com a busca)', async () => {
     listProductsMock.mockResolvedValue([]);
     render(<PrecosPage />, { wrapper: MemoryRouter });

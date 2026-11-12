@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import type { ProductSummary } from '@nossoradar/shared';
 
 import { AppShell } from '@/components/app-shell';
-import { visibleCategory } from '@/lib/category';
+import { KIT_CATEGORY, visibleCategory } from '@/lib/category';
 import { deltaPct, formatBRL, formatShortDate, productPath } from '@/lib/format';
 import { radarService } from '@/services/radar.service';
 
@@ -20,7 +20,8 @@ export const PrecosPage = () => {
   useEffect(() => {
     radarService
       .listCategories()
-      .then(setCategories)
+      // Kit não entra no histórico de preço (preço de combo não é comparável).
+      .then((list) => setCategories(list.filter((c) => c !== KIT_CATEGORY)))
       .catch(() => {});
   }, []);
 

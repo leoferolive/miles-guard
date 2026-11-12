@@ -4,6 +4,12 @@
  * Espelha `OTHER_CATEGORY` de `@nossoradar/core` (o web não depende do core).
  */
 export const OTHER_CATEGORY = 'Outros';
+/** "Kit"/combo: também passa por qualquer restrição e não entra no histórico de preço. */
+export const KIT_CATEGORY = 'Kit';
+
+/** Categorias que fazem sentido marcar numa Palavra-chave (Outros e Kit sempre passam). */
+export const isRestrictable = (category: string): boolean =>
+  category !== OTHER_CATEGORY && category !== KIT_CATEGORY;
 
 /** Rótulo de categoria a exibir num card/linha (null/"Outros" = nada a mostrar). */
 export function visibleCategory(category: string | null | undefined): string | null {

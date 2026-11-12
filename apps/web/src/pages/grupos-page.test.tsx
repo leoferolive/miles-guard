@@ -85,14 +85,15 @@ describe('GruposPage — categorias da Palavra-chave', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Editar categorias de x3d' }));
     const editor = screen.getByRole('group', { name: /Categorias em que .x3d. vale/ });
-    // "Outros" não é oferecido: categoria desconhecida já passa por qualquer restrição.
+    // "Outros" e "Kit" não são oferecidos: ambos já passam por qualquer restrição.
     expect(within(editor).queryByLabelText('Outros')).toBeNull();
+    expect(within(editor).queryByLabelText('Kit')).toBeNull();
 
-    await user.click(within(editor).getByLabelText('Kit'));
+    await user.click(within(editor).getByLabelText('Monitor'));
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
 
     await waitFor(() =>
-      expect(updateKeywordCategoriesMock).toHaveBeenCalledWith(KW_X3D, ['Processador', 'Kit']),
+      expect(updateKeywordCategoriesMock).toHaveBeenCalledWith(KW_X3D, ['Processador', 'Monitor']),
     );
     // Recarrega os grupos após salvar.
     await waitFor(() => expect(listGroupsMock).toHaveBeenCalledTimes(2));

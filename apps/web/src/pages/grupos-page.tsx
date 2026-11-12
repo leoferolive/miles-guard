@@ -9,7 +9,7 @@ import {
 
 import { AppShell } from '@/components/app-shell';
 import { useRealtime } from '@/hooks/use-realtime';
-import { describeKeywordScope, OTHER_CATEGORY } from '@/lib/category';
+import { describeKeywordScope, isRestrictable } from '@/lib/category';
 import { ApiError } from '@/services/api-client';
 import { radarService } from '@/services/radar.service';
 
@@ -467,7 +467,8 @@ interface CategoryPickerProps {
  * Nada marcado = qualquer categoria.
  */
 const CategoryPicker = ({ legend, categories, selected, onChange }: CategoryPickerProps) => {
-  const options = categories.filter((c) => c !== OTHER_CATEGORY || selected.includes(c));
+  // Outros/Kit sempre passam pela restrição: só aparecem se já estiverem salvos.
+  const options = categories.filter((c) => isRestrictable(c) || selected.includes(c));
 
   const toggle = (category: string) => {
     const next = selected.includes(category)
