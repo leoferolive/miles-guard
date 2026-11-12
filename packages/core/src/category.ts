@@ -7,8 +7,19 @@ import { normalizeText } from './text.js';
  */
 const RULES: { category: string; pattern: RegExp }[] = [
   { category: 'Notebook', pattern: /\b(?:notebook|laptop|chromebook|macbook|ultrabook)\b/ },
-  { category: 'Smartphone', pattern: /\b(?:smartphone|celular|iphone|galaxy [asz]\d+|redmi|moto [eg]\d*|poco [fmx]\d)\b/ },
-  { category: 'Calçados', pattern: /\b(?:tenis|sapatenis|sapato|chuteira|sandalia|chinelo|bota|papete|slide|crocs)\b/ },
+  {
+    category: 'Smartphone',
+    pattern:
+      /\b(?:smartphone|celular|iphone|galaxy [asz]\d+|redmi|moto [eg]\d*|poco [fmx]\d|motorola edge|edge \d{2}(?: fusion| pro| neo)?|[as]\d{2}(?: fe| ultra| plus)? 5g)\b/,
+  },
+  // Linhas de tênis da Nike/Jordan aparecem sem a palavra "tênis" ("Nike Air Max Nuaxis").
+  {
+    category: 'Calçados',
+    pattern:
+      /\b(?:tenis|sapatenis|sapato|chuteira|sandalia|chinelo|bota|papete|slide|crocs|air max|air force|dunk|jordan)\b/,
+  },
+  { category: 'Roupas', pattern: /\b(?:camiseta|camisa|regata|bermuda|shorts?|calca|jaqueta|moletom|agasalho|blusa|meias?|bone|vestido|legging)\b/ },
+  { category: 'Bolsas e mochilas', pattern: /\b(?:mochila|bolsa|pochete|necessaire|mala)\b/ },
   { category: 'TV', pattern: /\b(?:smart ?tv|tv|televis(?:or|ao))\b/ },
   { category: 'Monitor', pattern: /\bmonitor\b/ },
   { category: 'Gabinete', pattern: /\bgabinete\b/ },
@@ -62,9 +73,15 @@ export interface KeywordRule {
 
 /**
  * A Palavra-chave vale para esta categoria? Sem restrição → sim. Categoria desconhecida
- * ("Outros") → sim também: a restrição só corta o que sabidamente é OUTRA coisa — na
- * dúvida o radar avisa (perder oferta é pior que um alerta a mais).
+ * ("Outros") ou **Kit** → sim também: a restrição só corta o que sabidamente é OUTRA
+ * coisa, e um kit/combo pode conter o produto procurado ("TV MiniLED + Soundbar").
+ * Na dúvida o radar avisa (perder oferta é pior que um alerta a mais).
  */
 export function keywordAppliesTo(rule: KeywordRule, category: string): boolean {
-  return rule.categories.length === 0 || category === OTHER_CATEGORY || rule.categories.includes(category);
+  return (
+    rule.categories.length === 0 ||
+    category === OTHER_CATEGORY ||
+    category === KIT_CATEGORY ||
+    rule.categories.includes(category)
+  );
 }

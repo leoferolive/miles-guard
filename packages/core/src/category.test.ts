@@ -25,6 +25,15 @@ describe('classifyProduct (títulos reais)', () => {
     ['Tênis Masculino Nike Air Max SC', 'Calçados'],
     ['Smartphone Samsung Galaxy A57 5G 256GB', 'Smartphone'],
     ['Celular Samsung A57 128GB', 'Smartphone'],
+    ['A57 5G (128Gb) Cinza Samsung', 'Smartphone'],
+    ['Motorola Edge 60 Fusion 256GB', 'Smartphone'],
+    ['Edge 70 Pro 512GB Azul', 'Smartphone'],
+    ['Samsung Galaxy S25 FE 5G 256GB', 'Smartphone'],
+    ['Nike Air Max Nuaxis Masculino', 'Calçados'],
+    ['Camiseta Dri-fit Nike Bench Press', 'Roupas'],
+    ['Mochila Nike Heritage Unissex', 'Bolsas e mochilas'],
+    ['Monitor Samsung S24C310 24" Full HD', 'Monitor'],
+    ['Placa-mãe Asus Prime A520M-K', 'Placa-mãe'],
   ])('%s → %s', (title, category) => {
     expect(classifyProduct(title)).toBe(category);
   });
@@ -58,5 +67,10 @@ describe('keywordAppliesTo', () => {
 
   it('categoria desconhecida (Outros) passa: na dúvida, avisa', () => {
     expect(keywordAppliesTo(x3dSoProcessador, OTHER_CATEGORY)).toBe(true);
+  });
+
+  it('Kit passa: um combo pode conter o produto ("TV MiniLED + Soundbar")', () => {
+    expect(keywordAppliesTo({ term: 'miniled', categories: ['TV', 'Monitor'] }, 'Kit')).toBe(true);
+    expect(classifyProduct('Samsung Smart Tv 65" MiniLED 4K M75h + Soundbar Samsung Hw-B400f Combo')).toBe('Kit');
   });
 });
