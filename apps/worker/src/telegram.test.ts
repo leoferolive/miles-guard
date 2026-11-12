@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { formatAlertTime, formatDetectionAlert, TelegramNotifier } from './telegram.js';
+import {
+  formatAlertTime,
+  formatDetectionAlert,
+  markdownToPlainText,
+  TelegramNotifier,
+} from './telegram.js';
 
 describe('formatDetectionAlert', () => {
   it('monta o alerta com grupo, keywords e corpo', () => {
@@ -14,6 +19,78 @@ describe('formatDetectionAlert', () => {
     expect(out).toContain('IURI');
     expect(out).toContain('#Monitor');
     expect(out).toContain('Monitor Gamer 27');
+  });
+});
+
+/** Fora do bloco ``` todo `_`/`*` de dado dinâmico precisa estar escapado com `\`. */
+function unescapedOutsideCode(markdown: string, char: '_' | '[' | '`'): number {
+  const outside = markdown.replace(/```[\s\S]*?```/g, '');
+  return [...outside.matchAll(new RegExp(`(?<!\\\\)\\${char}`, 'g'))].length;
+}
+
+describe('formatDetectionAlert — Markdown seguro (alertas com "Odyssey OLED" nunca chegavam)', () => {
+  it('palavra-chave com espaço vira tag com _ escapado', () => {
+    const out = formatDetectionAlert({
+      groupName: 'IURI',
+      sender: 'Iuri',
+      text: 'Monitor',
+      matchedKeywords: ['Odyssey OLED', 'Ssd externo'],
+      time: '10/11 16:11:50',
+    });
+    expect(out).toContain('#Odyssey\\_OLED #Ssd\\_externo');
+    expect(unescapedOutsideCode(out, '_')).toBe(0);
+  });
+
+  it('nome do grupo e remetente com _ * [ ` são escapados', () => {
+    const out = formatDetectionAlert({
+      groupName: 'promo_tech [BR]',
+      sender: 'bot_*ofertas*`',
+      text: 'x',
+      matchedKeywords: ['x'],
+      time: '10/11 16:11:50',
+    });
+    expect(out).toContain('promo\\_tech \\[BR]');
+    expect(out).toContain('bot\\_\\*ofertas\\*\\`');
+    expect(unescapedOutsideCode(out, '_')).toBe(0);
+    expect(unescapedOutsideCode(out, '[')).toBe(0);
+  });
+
+  it('corte em 1000 caracteres não parte emoji ao meio (texto inválido → 400)', () => {
+    const out = formatDetectionAlert({
+      groupName: 'G',
+      sender: null,
+      text: `${'a'.repeat(999)}🔥🔥`,
+      matchedKeywords: ['x'],
+      time: '10/11 16:11:50',
+    });
+    expect(out).toContain(`${'a'.repeat(999)}🔥\n...`);
+    // Sem surrogate UTF-16 solto (emoji partido ao meio).
+    expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  });
+
+  it('fallback em texto puro remove os escapes de um alerta real', () => {
+    const out = formatDetectionAlert({
+      groupName: 'promo_tech',
+      sender: null,
+      text: 'x',
+      matchedKeywords: ['Odyssey OLED'],
+      time: '10/11 16:11:50',
+    });
+    const plain = markdownToPlainText(out);
+    expect(plain).toContain('Grupo: promo_tech');
+    expect(plain).toContain('#Odyssey_OLED');
+    expect(plain).not.toContain('\\');
+  });
+
+  it('``` no corpo da mensagem não fecha o bloco de código antes da hora', () => {
+    const out = formatDetectionAlert({
+      groupName: 'G',
+      sender: null,
+      text: 'antes ``` depois',
+      matchedKeywords: ['x'],
+      time: '10/11 16:11:50',
+    });
+    expect(out.match(/```/g)).toHaveLength(2);
   });
 });
 
@@ -121,6 +198,36 @@ describe('TelegramNotifier — resiliência de entrega', () => {
 
     await vi.waitFor(() => expect(onSent).toHaveBeenCalledTimes(1), { timeout: 2000 });
     expect(fetchMock).toHaveBeenCalledTimes(3); // 2 falhas + 1 sucesso
+    notifier.stop();
+  });
+
+  it('Telegram recusa o Markdown (400 parse) → reenvia na hora em texto puro e confirma', async () => {
+    silenceLogs();
+    const bodies: Record<string, unknown>[] = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      if (bodies.length === 1) {
+        return {
+          ok: false,
+          status: 400,
+          text: async () =>
+            '{"ok":false,"error_code":400,"description":"Bad Request: can\'t parse entities: Can\'t find end of the entity starting at byte offset 120"}',
+        } as unknown as Response;
+      }
+      return { ok: true } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const onSent = vi.fn();
+    const notifier = new TelegramNotifier('tok', 'chat', 60_000);
+    notifier.enqueue('🔍 *Palavras-chave:* #Odyssey_OLED', onSent);
+
+    await vi.waitFor(() => expect(onSent).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bodies[0]?.parse_mode).toBe('Markdown');
+    expect(bodies[1]?.parse_mode).toBeUndefined();
+    // Texto puro: sem os marcadores de Markdown (e sem os escapes).
+    expect(bodies[1]?.text).toBe('🔍 Palavras-chave: #Odyssey_OLED');
     notifier.stop();
   });
 
