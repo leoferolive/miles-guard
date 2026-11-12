@@ -295,3 +295,15 @@ describe('extractOffer — chave (endurecimento contra junções erradas)', () =
     );
   });
 });
+
+describe('extractOffer — categoria', () => {
+  it('classifica pelo título extraído (não pela descrição)', () => {
+    expect(extractOffer(IURI_5800).category).toBe('Processador');
+    expect(extractOffer(IURI_COOLER).category).toBe('Cooler'); // descrição cita 9800x3d
+    expect(extractOffer(PROMOZONE_TV).category).toBe('TV');
+  });
+
+  it('mensagem ambígua (vários produtos) → Outros', () => {
+    expect(extractOffer(IURI_MULTI).category).toBe('Outros');
+  });
+});

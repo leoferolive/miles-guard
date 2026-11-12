@@ -122,7 +122,8 @@ export interface MonitoredGroupWithKeywords {
   jid: string;
   name: string;
   enabled: boolean;
-  keywords: string[];
+  /** Regras: termo + categorias em que vale (vazio = qualquer). */
+  keywords: { term: string; categories: string[] }[];
 }
 
 export async function listMonitoredGroupsWithKeywords(): Promise<MonitoredGroupWithKeywords[]> {
@@ -132,6 +133,7 @@ export async function listMonitoredGroupsWithKeywords(): Promise<MonitoredGroupW
       name: monitoredGroups.name,
       enabled: monitoredGroups.enabled,
       term: keywords.term,
+      categories: keywords.categories,
     })
     .from(monitoredGroups)
     .leftJoin(keywords, eq(keywords.monitoredGroupId, monitoredGroups.id));
@@ -143,7 +145,7 @@ export async function listMonitoredGroupsWithKeywords(): Promise<MonitoredGroupW
       group = { jid: row.jid, name: row.name, enabled: row.enabled, keywords: [] };
       byJid.set(row.jid, group);
     }
-    if (row.term) group.keywords.push(row.term);
+    if (row.term) group.keywords.push({ term: row.term, categories: row.categories ?? [] });
   }
   return [...byJid.values()];
 }
@@ -155,7 +157,7 @@ export interface MonitoredGroupRow {
   name: string;
   enabled: boolean;
   createdAt: Date;
-  keywords: { id: string; monitoredGroupId: string; term: string; createdAt: Date }[];
+  keywords: KeywordRow[];
 }
 
 /** Lista os Grupos Monitorados com suas Palavras-chave (incluindo ids), para a API. */
@@ -169,6 +171,7 @@ export async function listMonitoredGroups(): Promise<MonitoredGroupRow[]> {
       createdAt: monitoredGroups.createdAt,
       keywordId: keywords.id,
       keywordTerm: keywords.term,
+      keywordCategories: keywords.categories,
       keywordCreatedAt: keywords.createdAt,
     })
     .from(monitoredGroups)
@@ -194,6 +197,7 @@ export async function listMonitoredGroups(): Promise<MonitoredGroupRow[]> {
         id: row.keywordId,
         monitoredGroupId: row.id,
         term: row.keywordTerm,
+        categories: row.keywordCategories ?? [],
         createdAt: row.keywordCreatedAt,
       });
     }
@@ -212,6 +216,7 @@ export async function getMonitoredGroupById(id: string): Promise<MonitoredGroupR
       createdAt: monitoredGroups.createdAt,
       keywordId: keywords.id,
       keywordTerm: keywords.term,
+      keywordCategories: keywords.categories,
       keywordCreatedAt: keywords.createdAt,
     })
     .from(monitoredGroups)
@@ -236,6 +241,7 @@ export async function getMonitoredGroupById(id: string): Promise<MonitoredGroupR
         id: row.keywordId,
         monitoredGroupId: row.id,
         term: row.keywordTerm,
+        categories: row.keywordCategories ?? [],
         createdAt: row.keywordCreatedAt,
       });
     }
@@ -302,6 +308,7 @@ export interface KeywordRow {
   id: string;
   monitoredGroupId: string;
   term: string;
+  categories: string[];
   createdAt: Date;
 }
 
@@ -309,6 +316,7 @@ export interface KeywordRow {
 export async function addKeyword(
   monitoredGroupId: string,
   term: string,
+  categories: string[] = [],
 ): Promise<KeywordRow | null> {
   const group = await db
     .select({ id: monitoredGroups.id })
@@ -319,19 +327,41 @@ export async function addKeyword(
 
   const inserted = await db
     .insert(keywords)
-    .values({ monitoredGroupId, term: term.trim() })
+    .values({ monitoredGroupId, term: term.trim(), categories })
     .onConflictDoNothing({ target: [keywords.monitoredGroupId, keywords.term] })
     .returning();
   const row = inserted[0];
   if (row) return row;
 
-  // já existia (conflito): retorna a existente
+  // Já existia (conflito): se vieram categorias, elas valem (senão o POST "salvaria"
+  // a restrição em silêncio sem aplicar). Sem categorias, devolve a existente intacta.
+  if (categories.length > 0) {
+    const updated = await db
+      .update(keywords)
+      .set({ categories: [...new Set(categories)] })
+      .where(and(eq(keywords.monitoredGroupId, monitoredGroupId), eq(keywords.term, term.trim())))
+      .returning();
+    if (updated[0]) return updated[0];
+  }
   const existing = await db
     .select()
     .from(keywords)
     .where(and(eq(keywords.monitoredGroupId, monitoredGroupId), eq(keywords.term, term.trim())))
     .limit(1);
   return existing[0] ?? null;
+}
+
+/** Define em quais categorias a Palavra-chave vale ([] = qualquer). null se não existe. */
+export async function setKeywordCategories(
+  id: string,
+  categories: string[],
+): Promise<KeywordRow | null> {
+  const updated = await db
+    .update(keywords)
+    .set({ categories: [...new Set(categories)] })
+    .where(eq(keywords.id, id))
+    .returning();
+  return updated[0] ?? null;
 }
 
 /** Remove uma Palavra-chave por id. Retorna true se removeu. */
@@ -358,6 +388,7 @@ export interface DetectionInput {
   price: number | null;
   productKey: string | null;
   productTitle: string | null;
+  category: string | null;
   extractionVersion: number;
 }
 
@@ -390,6 +421,7 @@ export async function getPreviousPrices(productKey: string, excludeId: string): 
 export interface ProductSummaryRow {
   productKey: string;
   title: string | null;
+  category: string | null;
   lastPrice: number;
   lastSeenAt: Date;
   offers: number;
@@ -402,16 +434,18 @@ export interface ProductSummaryRow {
  * mediana contam 1 ponto por (dia em BRT, preço), igual ao alerta (getPreviousPrices).
  */
 export async function listProducts(
-  opts: { search?: string; limit?: number } = {},
+  opts: { search?: string; category?: string; limit?: number } = {},
 ): Promise<ProductSummaryRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
   // % e _ digitados são literais (escapados), não curingas do ILIKE.
   const search = opts.search?.trim()
     ? `%${opts.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`
     : null;
+  const category = opts.category ?? null;
   const rows = await db.execute<{
     product_key: string;
     product_title: string | null;
+    category: string | null;
     last_price: string;
     last_seen_at: Date | string;
     offers: number;
@@ -426,25 +460,27 @@ export async function listProducts(
     ),
     latest as (
       select distinct on (product_key)
-        product_key, product_title, price as last_price, detected_at as last_seen_at
+        product_key, product_title, category, price as last_price, detected_at as last_seen_at
       from ${detections}
       where product_key is not null and price is not null
       order by product_key, detected_at desc
     )
-    select l.product_key, l.product_title, l.last_price, l.last_seen_at,
+    select l.product_key, l.product_title, l.category, l.last_price, l.last_seen_at,
       count(*)::int as offers,
       min(p.price) as min_price,
       percentile_cont(0.5) within group (order by p.price) as median_price
     from latest l
     join pts p on p.product_key = l.product_key
-    where ${search}::text is null or l.product_title ilike ${search}
-    group by l.product_key, l.product_title, l.last_price, l.last_seen_at
+    where (${search}::text is null or l.product_title ilike ${search})
+      and (${category}::text is null or l.category = ${category})
+    group by l.product_key, l.product_title, l.category, l.last_price, l.last_seen_at
     order by l.last_seen_at desc
     limit ${limit}
   `);
   return [...rows].map((r) => ({
     productKey: r.product_key,
     title: r.product_title,
+    category: r.category,
     lastPrice: Number(r.last_price),
     lastSeenAt: new Date(r.last_seen_at),
     offers: r.offers,
@@ -493,6 +529,7 @@ export interface DetectionOfferUpdate {
   price: number | null;
   productKey: string | null;
   productTitle: string | null;
+  category: string | null;
   extractionVersion: number;
 }
 
@@ -516,6 +553,7 @@ export interface DetectionRow {
   notifiedTelegram: boolean;
   price: number | null;
   productKey: string | null;
+  category: string | null;
 }
 
 export interface ListDetectionsFilters {
@@ -523,6 +561,7 @@ export interface ListDetectionsFilters {
   offset?: number;
   groupJid?: string;
   keyword?: string;
+  category?: string;
   since?: Date;
 }
 
@@ -543,6 +582,7 @@ export async function listDetections(
   const conditions = [];
   if (filters.groupJid) conditions.push(eq(detections.groupJid, filters.groupJid));
   if (filters.since) conditions.push(gte(detections.detectedAt, filters.since));
+  if (filters.category) conditions.push(eq(detections.category, filters.category));
   if (filters.keyword) {
     // matchedKeywords é text[]; usa o operador de contains do Postgres.
     conditions.push(dsql`${detections.matchedKeywords} @> ARRAY[${filters.keyword}]::text[]`);

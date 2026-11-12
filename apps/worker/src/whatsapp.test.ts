@@ -169,12 +169,13 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
   const GROUP_JID = '120363000000000000@g.us';
 
   // Acesso ao método privado + injeção do grupo monitorado (sem Postgres/Baileys).
-  function newWorkerMonitoring(keywords: string[]): {
+  function newWorkerMonitoring(keywords: Array<string | { term: string; categories: string[] }>): {
     handle: (msg: unknown) => Promise<void>;
   } {
     const worker = new WhatsAppWorker();
+    const rules = keywords.map((k) => (typeof k === 'string' ? { term: k, categories: [] } : k));
     (worker as unknown as { monitored: Map<string, unknown> }).monitored = new Map([
-      [GROUP_JID, { jid: GROUP_JID, name: 'Grupo Teste', enabled: true, keywords }],
+      [GROUP_JID, { jid: GROUP_JID, name: 'Grupo Teste', enabled: true, keywords: rules }],
     ]);
     return {
       handle: (msg: unknown) =>
@@ -249,6 +250,7 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
         price: 1701,
         productKey: 'c:5800x3d',
         productTitle: 'Processador AMD Ryzen 7 5800X3D AM4',
+        category: 'Processador',
         extractionVersion: OFFER_EXTRACTION_VERSION,
       }),
     );
@@ -291,6 +293,60 @@ describe('WhatsAppWorker.handleMessage() — desfechos (Bug B: extração de tex
     expect(formatDetectionAlert).toHaveBeenCalledWith(
       expect.objectContaining({ price: { current: 1701, insight: null } }),
     );
+  });
+
+  describe('categorias da Palavra-chave', () => {
+    const x3dSoProcessador = { term: 'x3d', categories: ['Processador', 'Kit'] };
+
+    it('casa na categoria permitida e grava a categoria', async () => {
+      vi.mocked(formatDetectionAlert).mockClear();
+      const { handle } = newWorkerMonitoring([x3dSoProcessador]);
+      await handle(groupMsg({ conversation: 'Processador AMD Ryzen 7 5800X3D AM4\n\n💵 R$ 1701' }, 'cat-1'));
+
+      expect(dbMock.insertDetection).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Processador', matchedKeywords: ['x3d'] }),
+      );
+      expect(formatDetectionAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Processador' }),
+      );
+    });
+
+    it('corta anúncio de OUTRA categoria que só cita o termo (gabinete "para 5800x3d")', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const { handle } = newWorkerMonitoring([x3dSoProcessador]);
+      await handle(
+        groupMsg(
+          { conversation: 'Gabinete Gamer Mancer Cv450, Mini-Tower\n\nIdeal para 5800x3d\n\n💵 R$ 319' },
+          'cat-2',
+        ),
+      );
+
+      expect(dbMock.insertDetection).not.toHaveBeenCalled();
+      expect(metricsMock.monitoredMessagesCounter.inc).toHaveBeenCalledWith({
+        group_jid: GROUP_JID,
+        outcome: 'out_of_category',
+      });
+    });
+
+    it('categoria desconhecida passa (na dúvida, avisa)', async () => {
+      const { handle } = newWorkerMonitoring([x3dSoProcessador]);
+      await handle(groupMsg({ conversation: 'Promoção relâmpago da linha x3d, corre!' }, 'cat-3'));
+
+      expect(dbMock.insertDetection).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Outros', matchedKeywords: ['x3d'] }),
+      );
+    });
+
+    it('só as palavras-chave da categoria entram na detecção', async () => {
+      const { handle } = newWorkerMonitoring([x3dSoProcessador, 'gabinete']);
+      await handle(
+        groupMsg({ conversation: 'Gabinete Gamer Mancer Cv450\n\nIdeal para 5800x3d\n\n💵 R$ 319' }, 'cat-4'),
+      );
+
+      expect(dbMock.insertDetection).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Gabinete', matchedKeywords: ['gabinete'] }),
+      );
+    });
   });
 
   it('formato de bot (templateMessage) com keyword vira detecção', async () => {

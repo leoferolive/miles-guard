@@ -10,7 +10,13 @@ const store = {
     name: string;
     enabled: boolean;
     createdAt: Date;
-    keywords: Array<{ id: string; monitoredGroupId: string; term: string; createdAt: Date }>;
+    keywords: Array<{
+      id: string;
+      monitoredGroupId: string;
+      term: string;
+      categories: string[];
+      createdAt: Date;
+    }>;
   }>,
 };
 
@@ -58,6 +64,7 @@ vi.mock('@nossoradar/db', () => ({
           id: nextId(),
           monitoredGroupId: '',
           term,
+          categories: [] as string[],
           createdAt: now,
         })),
       };
@@ -77,12 +84,22 @@ vi.mock('@nossoradar/db', () => ({
     store.groups.splice(i, 1);
     return true;
   }),
-  addKeyword: vi.fn(async (groupId: string, term: string) => {
+  addKeyword: vi.fn(async (groupId: string, term: string, categories: string[] = []) => {
     const g = store.groups.find((x) => x.id === groupId);
     if (!g) return null;
-    const kw = { id: nextId(), monitoredGroupId: groupId, term, createdAt: now };
+    const kw = { id: nextId(), monitoredGroupId: groupId, term, categories, createdAt: now };
     g.keywords.push(kw);
     return kw;
+  }),
+  setKeywordCategories: vi.fn(async (id: string, categories: string[]) => {
+    for (const g of store.groups) {
+      const kw = g.keywords.find((k) => k.id === id);
+      if (kw) {
+        kw.categories = categories;
+        return kw;
+      }
+    }
+    return null;
   }),
   deleteKeyword: vi.fn(async (id: string) => {
     for (const g of store.groups) {
@@ -108,6 +125,7 @@ vi.mock('@nossoradar/db', () => ({
         notifiedTelegram: true,
         price: 1701,
         productKey: 'c:5800x3d',
+        category: 'Processador',
       },
     ],
     total: 1,
@@ -123,6 +141,7 @@ vi.mock('@nossoradar/db', () => ({
     {
       productKey: 'c:5800x3d',
       title: 'Processador AMD Ryzen 7 5800X3D',
+      category: 'Processador',
       lastPrice: 1701,
       lastSeenAt: now,
       offers: 6,
@@ -293,6 +312,68 @@ describe('nossoRadar API', () => {
     expect(finalList.json()).toHaveLength(0);
   });
 
+  it('Palavra-chave com categorias: cria, altera e valida (NOTIFY config_changed)', async () => {
+    const auth = { authorization: `Bearer ${token(app)}` };
+    const group = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/groups',
+        headers: auth,
+        payload: { jid: '222@g.us', name: 'IURI', keywords: [] },
+      })
+    ).json() as { id: string };
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/groups/${group.id}/keywords`,
+      headers: auth,
+      payload: { term: 'x3d', categories: ['Processador', 'Kit'] },
+    });
+    expect(created.statusCode).toBe(201);
+    const kw = created.json() as { id: string; categories: string[] };
+    expect(kw.categories).toEqual(['Processador', 'Kit']);
+
+    notify.mockClear();
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/keywords/${kw.id}`,
+      headers: auth,
+      payload: { categories: ['Processador'] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect((patched.json() as { categories: string[] }).categories).toEqual(['Processador']);
+    expect(notify).toHaveBeenCalledWith('config_changed');
+
+    const invalid = await app.inject({
+      method: 'PATCH',
+      url: `/api/keywords/${kw.id}`,
+      headers: auth,
+      payload: { categories: ['Inventada'] },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const missing = await app.inject({
+      method: 'PATCH',
+      url: '/api/keywords/00000000-0000-0000-0000-0000000000ff',
+      headers: auth,
+      payload: { categories: [] },
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it('GET /api/categories lista as categorias de produto', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/categories',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const list = res.json() as string[];
+    expect(list).toContain('Processador');
+    expect(list).toContain('Calçados');
+    expect(list.at(-1)).toBe('Outros');
+  });
+
   it('PATCH/DELETE de grupo inexistente retorna 404', async () => {
     const auth = { authorization: `Bearer ${token(app)}` };
     const id = '00000000-0000-0000-0000-0000000000ff';
@@ -381,7 +462,7 @@ describe('nossoRadar API', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/detections?limit=10&offset=5&groupJid=111@g.us&keyword=latam&since=2026-06-01T00:00:00.000Z',
+      url: '/api/detections?limit=10&offset=5&groupJid=111@g.us&keyword=latam&category=TV&since=2026-06-01T00:00:00.000Z',
       headers: auth,
     });
     expect(res.statusCode).toBe(200);
@@ -398,6 +479,7 @@ describe('nossoRadar API', () => {
         offset: 5,
         groupJid: '111@g.us',
         keyword: 'latam',
+        category: 'TV',
         since: expect.any(Date),
       }),
     );
@@ -412,6 +494,7 @@ describe('nossoRadar API', () => {
     expect((res.json() as { items: unknown[] }).items[0]).toMatchObject({
       price: 1701,
       productKey: 'c:5800x3d',
+      category: 'Processador',
     });
   });
 
@@ -426,6 +509,7 @@ describe('nossoRadar API', () => {
       {
         productKey: 'c:5800x3d',
         title: 'Processador AMD Ryzen 7 5800X3D',
+        category: 'Processador',
         lastPrice: 1701,
         lastSeenAt: now.toISOString(),
         offers: 6,
@@ -434,6 +518,15 @@ describe('nossoRadar API', () => {
       },
     ]);
     expect(dbMock.listProducts).toHaveBeenCalledWith({ search: 'ryzen', limit: 50 });
+  });
+
+  it('GET /api/products repassa o filtro de categoria', async () => {
+    await app.inject({
+      method: 'GET',
+      url: '/api/products?category=TV',
+      headers: { authorization: `Bearer ${token(app)}` },
+    });
+    expect(dbMock.listProducts).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'TV' }));
   });
 
   it('GET /api/products/:key/history traz pontos e estatísticas sem repostagens', async () => {

@@ -18,6 +18,11 @@ _Evitar_: nome do grupo (como chave de identidade)
 Termo que, ao aparecer numa mensagem, sinaliza relevância; pertence a **um** Grupo Monitorado (não há lista global).
 _Evitar_: filtro global, termo
 
+**Categoria**:
+O tipo de produto de um anúncio (Processador, Monitor, TV, Calçados, Kit, …), derivado do título; **Outros** quando
+desconhecida. Uma **Palavra-chave** pode valer só em algumas Categorias (ex.: `x3d` só em Processador) — ver ADR-0008.
+_Evitar_: tag, tipo, filtro
+
 **Detecção**:
 O evento gerado quando uma mensagem de um Grupo Monitorado contém uma de suas Palavras-chave.
 _Evitar_: oferta, match
@@ -49,7 +54,8 @@ O dono — único — autenticado por **e-mail + senha** (ADR-0007). Há um só 
 
 - O **Usuário** (único) pareia uma **Sessão WhatsApp** (uma só).
 - Um **Grupo Monitorado** é identificado por um **JID** e possui uma ou mais **Palavras-chave**.
-- Uma mensagem que contém uma **Palavra-chave** do seu **Grupo Monitorado** de origem produz uma **Detecção**.
+- Uma mensagem que contém uma **Palavra-chave** do seu **Grupo Monitorado** de origem produz uma **Detecção** — se a
+  Palavra-chave tiver Categorias, só quando a **Categoria** do anúncio for uma delas (ou desconhecida).
 - Uma **Detecção** dispara um **Alerta de Detecção** (Telegram do Usuário) e é persistida para o histórico.
 - Um **Alerta de Infra** nasce da observabilidade, não de uma **Detecção** — são coisas distintas.
 
@@ -64,7 +70,8 @@ O dono — único — autenticado por **e-mail + senha** (ADR-0007). Há um só 
 
 - **"alerta"** era usado para o critério, para o evento e para ops — resolvido: o evento de casamento é a **Detecção**;
   a notificação dela ao Usuário é **Alerta de Detecção**; alertas operacionais são **Alerta de Infra**. Não existe
-  entidade "Regra" separada — o critério **é** o Grupo Monitorado + suas Palavras-chave.
+  entidade "Regra" separada — o critério **é** o Grupo Monitorado + suas Palavras-chave (que podem ter Categorias,
+  ADR-0008).
 - **"oferta"** (herança de milhas) — generalizado para **Detecção**; o assunto pode ser qualquer um.
 - Identificação de grupo por **nome** (modelo antigo, substring fuzzy) → por **JID** (estável).
 - **"comunidade + subgrupos"** (modelo antigo, hierárquico e único) → lista plana de **Grupos Monitorados**.

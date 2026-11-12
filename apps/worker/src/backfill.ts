@@ -22,6 +22,7 @@ export async function backfillOfferExtraction(opts: { batchSize?: number } = {})
         price: offer.price,
         productKey: offer.productKey,
         productTitle: offer.title,
+        category: offer.category,
         extractionVersion: OFFER_EXTRACTION_VERSION,
       });
       total += 1;

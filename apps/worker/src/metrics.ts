@@ -62,7 +62,7 @@ export const detectionsCounter = new Counter({
  * um formato de mensagem que o `getMessageText` ainda não extrai.
  *
  * Cardinalidade controlada: `group_jid` é uma lista fechada (poucos monitorados) e
- * `outcome` tem 4 valores fixos. O tipo da mensagem (Object.keys) vai só no log.
+ * `outcome` tem 5 valores fixos (out_of_category = curadoria por categoria cortou). O tipo da mensagem (Object.keys) vai só no log.
  */
 export const monitoredMessagesCounter = new Counter({
   name: 'nossoradar_worker_monitored_messages_total',

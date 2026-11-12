@@ -55,6 +55,11 @@ export const keywords = pgTable(
       .notNull()
       .references(() => monitoredGroups.id, { onDelete: 'cascade' }),
     term: text('term').notNull(),
+    /**
+     * Categorias de produto em que a Palavra-chave vale (ex.: x3d → Processador).
+     * Vazio = qualquer categoria. Categoria desconhecida ("Outros") sempre passa.
+     */
+    categories: text('categories').array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('keywords_group_term_uq').on(t.monitoredGroupId, t.term)],
@@ -81,6 +86,8 @@ export const detections = pgTable(
     /** Identidade do produto (`c:…` códigos de modelo / `w:…` palavras). null = não agrupa. */
     productKey: text('product_key'),
     productTitle: text('product_title'),
+    /** Categoria do produto (classifyProduct do título); null só em linhas não reprocessadas. */
+    category: text('category'),
     /** OFFER_EXTRACTION_VERSION usada; abaixo da atual = reprocessar (backfill no boot do worker). */
     extractionVersion: smallint('extraction_version').notNull().default(0),
   },
@@ -89,6 +96,7 @@ export const detections = pgTable(
     index('detections_group_jid_idx').on(t.groupJid),
     index('detections_product_key_idx').on(t.productKey, t.detectedAt),
     index('detections_extraction_version_idx').on(t.extractionVersion),
+    index('detections_category_idx').on(t.category),
   ],
 );
 
