@@ -38,6 +38,26 @@ describe('classifyProduct (títulos reais)', () => {
     expect(classifyProduct(title)).toBe(category);
   });
 
+  // Revisão do PR #21: menção de compatibilidade/acessório no FIM do título não pode
+  // vencer o produto do começo — com restrição, isso cortaria oferta relevante.
+  it.each([
+    ['SSD Kingston A400 480GB SATA para Desktop e Notebook', 'Armazenamento'],
+    ['SSD Externo SanDisk 1TB compatível com iPhone e celular', 'Armazenamento'],
+    ['HD Externo Seagate 2TB compatível com PS5 e Smart TV', 'Armazenamento'],
+    ['Monitor Gamer Xiaomi Redmi G Pro 27" MiniLED', 'Monitor'],
+    ['Monitor Samsung Odyssey OLED G6 27" ideal para PC e Notebook', 'Monitor'],
+    ['Aparador Philips OneBlade 360 com Bolsa', 'Barbear e aparar'],
+    ['Aparador Philips OneBlade 360 com Necessaire', 'Barbear e aparar'],
+    ['Echo Dot 5ª geração com Alexa, controle sua TV', 'Casa inteligente'],
+    ['Processador Ryzen 7 5700X3D, AM4, sem cooler e sem gabinete', 'Processador'],
+    ['Cooler para Processador DeepCool AK400', 'Cooler'],
+    ['Water Cooler MSI 240mm AM5 Ryzen', 'Cooler'],
+    ['Processador Ryzen 5 3400G with Radeon RX Vega', 'Processador'],
+    ['Samsung Smart Monitor M7 32" 4K com Smart TV', 'Monitor'],
+  ])('produto principal vence menção: %s → %s', (title, category) => {
+    expect(classifyProduct(title)).toBe(category);
+  });
+
   it('kit: produtos de categorias diferentes juntos', () => {
     expect(classifyProduct('Processador AMD Ryzen 7 7800X3D + Placa-Mâe MSI MAG X870 Tomahawk')).toBe('Kit');
     expect(classifyProduct('Kit Upgrade Ryzen 5 5600')).toBe('Kit');

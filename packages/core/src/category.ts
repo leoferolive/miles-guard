@@ -1,9 +1,9 @@
 import { normalizeText } from './text.js';
 
 /**
- * Categorias de produto, na ORDEM de avaliação: a primeira que casar vence. A ordem
- * resolve ambiguidades reais dos títulos — "Notebook … Intel Core i5 … SSD" é Notebook
- * (não Processador/Armazenamento); "Processador … (Sem Cooler)" é Processador (não Cooler).
+ * Categorias de produto. Vence a que aparece MAIS CEDO no título (ver classifyPart):
+ * "Notebook … Core i5 … SSD" é Notebook; "Processador … (Sem Cooler)" é Processador;
+ * "Cooler para Processador" é Cooler. A ordem da lista só desempata a mesma posição.
  */
 const RULES: { category: string; pattern: RegExp }[] = [
   { category: 'Notebook', pattern: /\b(?:notebook|laptop|chromebook|macbook|ultrabook)\b/ },
@@ -45,8 +45,19 @@ export const PRODUCT_CATEGORIES: readonly string[] = [
   OTHER_CATEGORY,
 ];
 
+/**
+ * A categoria cujo termo aparece MAIS CEDO no título vence: o produto principal vem
+ * primeiro e compatibilidade/acessório no fim ("SSD … para Notebook", "Echo Dot …
+ * controle sua TV", "OneBlade … com Bolsa") não pode roubar a categoria. Empate na mesma
+ * posição → ordem de RULES.
+ */
 function classifyPart(norm: string): string {
-  return RULES.find((r) => r.pattern.test(norm))?.category ?? OTHER_CATEGORY;
+  let best: { index: number; category: string } | null = null;
+  for (const rule of RULES) {
+    const m = rule.pattern.exec(norm);
+    if (m && (best === null || m.index < best.index)) best = { index: m.index, category: rule.category };
+  }
+  return best?.category ?? OTHER_CATEGORY;
 }
 
 /**

@@ -333,7 +333,16 @@ export async function addKeyword(
   const row = inserted[0];
   if (row) return row;
 
-  // já existia (conflito): retorna a existente
+  // Já existia (conflito): se vieram categorias, elas valem (senão o POST "salvaria"
+  // a restrição em silêncio sem aplicar). Sem categorias, devolve a existente intacta.
+  if (categories.length > 0) {
+    const updated = await db
+      .update(keywords)
+      .set({ categories: [...new Set(categories)] })
+      .where(and(eq(keywords.monitoredGroupId, monitoredGroupId), eq(keywords.term, term.trim())))
+      .returning();
+    if (updated[0]) return updated[0];
+  }
   const existing = await db
     .select()
     .from(keywords)

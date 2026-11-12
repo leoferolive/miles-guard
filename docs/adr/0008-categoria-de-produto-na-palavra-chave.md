@@ -15,12 +15,14 @@ caso a caso; a categoria separa "o que é o que" de forma legível e reaproveit�
 
 ## Decisão
 
-- **Categoria** = primeira regra que casa no título normalizado, em ordem (Notebook antes
-  de Processador; Processador antes de Cooler, por "Sem Cooler"). Partes de categorias
-  diferentes unidas por `+` (ou "kit"/"combo") = **Kit**. Sem regra = **Outros**.
+- **Categoria** = a regra cujo termo aparece **mais cedo** no título normalizado (o produto
+  principal vem primeiro; "SSD … para Notebook" é Armazenamento, "Cooler para Processador"
+  é Cooler). Empate na mesma posição → ordem da lista. Partes de categorias diferentes
+  unidas por `+` (ou "kit"/"combo") = **Kit**. Sem regra = **Outros**.
 - **Falha aberta (recall acima de precisão)**: Palavra-chave sem categorias vale para
-  tudo; Categoria **Outros** (desconhecida) passa por qualquer restrição. A restrição só
-  corta o que sabidamente é *outra coisa* — perder oferta é pior que um alerta a mais.
+  tudo; Categorias **Outros** (desconhecida) e **Kit** (um combo pode conter o produto
+  procurado) passam por qualquer restrição. A restrição só corta o que sabidamente é
+  *outra coisa* — perder oferta é pior que um alerta a mais.
 - O corte é observável: desfecho `out_of_category` na métrica de mensagens monitoradas e
   log INFO com termo, categoria e título.
 - A categoria é gravada na Detecção (`detections.category`) e entra no versionamento da
