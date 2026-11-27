@@ -225,7 +225,7 @@ function phoneKey(norm: string): string | null | undefined {
   }
   if (!storage) return undefined;
   // "+ <acessório>" = combo ("Cinza + Watch9", "+ Moto Buds"); "+" de ficha (RAM, câmera) não é.
-  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|notebook|earbuds|galaxy (?:watch|buds))/.test(norm))
+  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|tab|ipad|airpods|chip|notebook|earbuds|galaxy|iphone|moto|motorola|samsung|apple|xiaomi|redmi)(?![a-z])/.test(norm))
     return null;
 
   // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha. "128 gb" e "8/128gb"

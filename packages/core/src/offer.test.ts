@@ -412,6 +412,8 @@ describe('extractOffer — preço "Por:" e chave de celular', () => {
     expect(key('Galaxy A16 128GB 4GB RAM Câm 50MP + Selfie 13MP')).not.toBeNull();
     expect(key('Smartphone Samsung Galaxy A57 128GB + Galaxy Buds 3')).toBeNull();
     expect(key('Smartphone Motorola Moto G56 256GB + Capa')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy A57 + Galaxy Tab A9 128GB')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy A57 128GB + Chip')).toBeNull();
     expect(key('Smartphone Xiaomi Redmi Note 14 Pro+ 5G 256GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 14 Pro 5G 256GB'));
     expect(key('Celular Samsung Galaxy S25+ 5G 256GB')).not.toBe(key('Celular Samsung Galaxy S25 5G 256GB'));
   });
