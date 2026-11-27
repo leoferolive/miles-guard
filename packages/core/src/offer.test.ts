@@ -307,3 +307,63 @@ describe('extractOffer — categoria', () => {
     expect(extractOffer(IURI_MULTI).category).toBe('Outros');
   });
 });
+
+describe('extractOffer — preço "Por:" e chave de celular', () => {
+  const ml = (t: string, p: string) => `🔥${t}\n\n✅ Por: R$ ${p} (à vista)\nou R$ 2.221,11 em até 10x 💳\n\n🔗 https://exemplo.com/x\n\n*Ofertas limitadas!`;
+  const edge = 'Smartphone Motorola Edge 70 Fusion 5g - 256gb 24gb (8gb Ram + 16gb Ram Boost), Camera 50mp Sony Lytia 710, Tela 1.5k Extreme Amoled 144hz - Verde';
+  const key = (t: string) => extractOffer(`🔥${t}\n✅ Por: R$ 999,00`).productKey;
+
+  it('Por: R$ X (à vista) vira o preço; parcela ignorada', () => {
+    expect(extractOffer(ml(edge, '1.999,00')).price).toBe(1999);
+    expect(extractOffer(`${edge}\n\n✅ *Por: R$ 1.999,00*\nou R$ 2.221,11 em 10x`).price).toBe(1999);
+  });
+  it('formato Amazon continua', () => {
+    expect(extractOffer(`🔥Fone XYZ 123\n\n✅ Por: R$ 1.789,90 em até 12x 💳\n\n🔗 https://exemplo.com/x`).price).toBe(1789.9);
+  });
+  it('duas linhas "Por:" são ambíguas', () => {
+    expect(extractOffer('Produto X1\nPor: R$ 100\nPor: R$ 90').price).toBeNull();
+  });
+  it('parcela "em até Nx" não vira preço quando há outro valor', () => {
+    expect(extractOffer('Produto Legal ABC\nR$ 500,00\nR$ 55,00 em até 10x').price).toBe(500);
+  });
+  it('mesma chave para o mesmo celular com fichas diferentes', () => {
+    const a = [
+      'Smartphone Samsung Galaxy A57 128GB 5G 8GB RAM Cinza 6,7" Câm Tripla + Selfie 12MP',
+      'Celular Samsung Galaxy A57 5G 128GB, 8GB RAM, Câmera 50MP, IP68, Super AMOLED 6.7',
+      'Celular Samsung Galaxy A57 5G 128GB, 8GB RAM, Câmera 50MP, IP68, Super AMOLED 6.7", Recursos AI - Lilás',
+      'Celular Samsung Galaxy A57 5g 128gb, 8gb Ram, Recursos Ai',
+      'Celular Samsung Galaxy A57 5G 128GB',
+    ].map(key);
+    expect(a[0]).not.toBeNull();
+    expect(new Set(a).size).toBe(1);
+    const b = [
+      'Smartphone Motorola Edge 70 Fusion 5g - 256gb 12gb Ram + 12gb Ram Boost, Camera 50mp Sony Lytia 710, Tela 1.5k Extreme Amoled 144hz - Branco',
+      'Smartphone Motorola Edge 70 Fusion 5G 256GB 12GB RAM, Camera 50MP Sony Lytia 710, Tela 1.5K Extreme AMOLED 144Hz, Branco',
+      edge,
+    ].map(key);
+    expect(b[0]).not.toBeNull();
+    expect(new Set(b).size).toBe(1);
+  });
+  it('chaves diferentes para modelos/armazenamentos/edições diferentes', () => {
+    const ks = [
+      'Smartphone Motorola Edge 70 Fusion 5G 256GB',
+      'Smartphone Motorola Edge 70 Pro 5G 256GB',
+      'Smartphone Motorola Edge 70 Crystals by Swarovski 5G 512GB',
+      'Smartphone Motorola Edge 60 Fusion 5G 256GB',
+      'Smartphone Motorola Edge 60 Pro 5G 256GB',
+      'Celular Samsung Galaxy S25 FE 5G 128GB',
+      'Celular Samsung Galaxy S25 5G 128GB',
+      'Celular Samsung Galaxy A57 5G 128GB',
+      'Celular Samsung Galaxy A57 5G 256GB',
+      'Smartphone Motorola Edge 70 Fusion 5g Fifa World Cup Collection 256gb',
+    ].map(key);
+    expect(ks.every((k) => k !== null)).toBe(true);
+    expect(new Set(ks).size).toBe(ks.length);
+  });
+  it('kit/combo segue null; sem armazenamento cai na lógica antiga', () => {
+    expect(key('Smartphone Samsung Galaxy A57 5G (128GB) Cinza + Watch9 BT 40 mm')).toBeNull();
+    expect(key('Kit Smartphone Motorola Moto G56 256GB + Moto Buds 2')).toBeNull();
+    expect(key('Combo Samsung Galaxy A57 128GB')).toBeNull();
+    expect(key('Celular Samsung Galaxy A57 5G')).not.toMatch(/^p:/);
+  });
+});

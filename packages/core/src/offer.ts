@@ -5,7 +5,7 @@ import { normalizeText } from './text.js';
  * Versão das regras de extração. Ao mudar qualquer heurística abaixo, incremente:
  * o worker reprocessa no boot as detecções gravadas com versão menor (backfill).
  */
-export const OFFER_EXTRACTION_VERSION = 3;
+export const OFFER_EXTRACTION_VERSION = 4;
 
 export interface OfferInfo {
   /** Linha do produto, sem markdown/emoji (null se não identificada). */
@@ -61,13 +61,35 @@ function porPrices(lines: string[]): number[] {
   return out;
 }
 
-/** Valores "R$ X" que não são desconto ("R$ 100 OFF") nem parcela ("10x de R$ 99"). */
-function plainRealAmounts(text: string): number[] {
+/**
+ * "Por: R$ 1.999,00 (à vista)" / "✅ *Por: R$ 99*" — linha que COMEÇA com "Por" e SEM "De"
+ * (o "De … por" já é tratado por porPrices). Vale o valor logo após "Por:".
+ */
+function loneRealPorPrices(lines: string[]): number[] {
+  const re = new RegExp(String.raw`^[^\p{L}\p{N}]*por\s*:?\s*\*?\s*R\$\s*\*?\s*` + NUM, 'iu');
+  const out: number[] = [];
+  for (const line of lines) {
+    if (/\bde\b/i.test(line)) continue;
+    const m = re.exec(line);
+    if (m?.[1]) out.push(parseBRL(m[1]));
+  }
+  return out;
+}
+
+/**
+ * Valores "R$ X" que não são desconto ("R$ 100 OFF") nem parcela ("10x de R$ 99"). Com
+ * `skipInstallment`, também descarta "R$ Y em até 10x" / "R$ Y em 10x" (valor parcelado).
+ */
+function plainRealAmounts(text: string, skipInstallment = false): number[] {
   const re = new RegExp(String.raw`R\$\s*\*?\s*` + NUM + String.raw`(?!\s*(?:off|de desconto))`, 'gi');
   const out: number[] = [];
   for (const m of text.matchAll(re)) {
     const before = text.slice(Math.max(0, m.index - 8), m.index);
     if (/\d+\s*x\s*(?:de\s*)?$/i.test(before)) continue;
+    if (skipInstallment) {
+      const after = text.slice(m.index + m[0].length, m.index + m[0].length + 20);
+      if (/^\s*\*?\s*em\s+(?:até\s+|ate\s+)?\d+\s*x/i.test(after)) continue;
+    }
     if (m[1]) out.push(parseBRL(m[1]));
   }
   return out;
@@ -78,6 +100,10 @@ function extractPrice(lines: string[], text: string): number | null | 'ambiguous
   if (por.length > 1) return 'ambiguous';
   if (por.length === 1) return por[0] ?? null;
 
+  const lone = loneRealPorPrices(lines);
+  if (lone.length > 1) return 'ambiguous';
+  if (lone.length === 1) return lone[0] ?? null;
+
   const emojiLines = lines.filter((l) => PRICE_EMOJI_LINE.test(l));
   if (emojiLines.length > 1) return 'ambiguous';
   if (emojiLines.length === 1) {
@@ -86,7 +112,9 @@ function extractPrice(lines: string[], text: string): number | null | 'ambiguous
     return plainRealAmounts(emojiLines[0] ?? '')[0] ?? null;
   }
 
-  const amounts = [...new Set(plainRealAmounts(text))];
+  // "R$ Y em até 10x" é parcela: só vale como preço se não houver outro valor.
+  let amounts = [...new Set(plainRealAmounts(text, true))];
+  if (amounts.length === 0) amounts = [...new Set(plainRealAmounts(text))];
   return amounts.length === 1 ? (amounts[0] ?? null) : null;
 }
 
@@ -174,6 +202,45 @@ function isPartNumber(token: string): boolean {
 /** Código curto (g5, s24): só identifica junto de um qualificador/tamanho/capacidade. */
 const isWeak = (code: string) => code.length <= 3;
 
+const PHONE_BRANDS = new Set([
+  'smartphone', 'celular', 'telefone', 'samsung', 'motorola', 'xiaomi', 'apple', 'lg', 'asus', 'realme', 'infinix', 'nokia', 'zte', 'oppo', 'honor',
+]);
+/** Fim do trecho do modelo: capacidade, câmera, tela, RAM, taxa de Hz, polegadas, "com …". */
+const PHONE_STOP =
+  /^(?:\d+(?:gb|tb|mp|hz|mah|w|pol)|\d+[.,]\d+(?:pol)?|\d+k|ram|camera|cam|tela|display|recursos|com|dual|chip|ia|ai|ip\d+|nfc|lte)$/;
+
+/**
+ * Chave de celular = linha do modelo + armazenamento. RAM, câmera, IP, polegadas, Hz, cor
+ * etc. ficam fora (o mesmo aparelho aparece com fichas diferentes). null = não deu para
+ * identificar (undefined → o chamador cai na lógica genérica); null = combo/acessório.
+ */
+function phoneKey(norm: string): string | null | undefined {
+  // Armazenamento: maior capacidade >= 32GB que não seja RAM ("12gb ram").
+  let storage = 0;
+  for (const m of norm.matchAll(/(\d+)\s*(gb|tb)\b(?!\s*(?:\(|de\s+)?ram)/g)) {
+    const gb = Number(m[1]) * (m[2] === 'tb' ? 1024 : 1);
+    if (gb >= 32 && gb > storage) storage = gb;
+  }
+  if (!storage) return undefined;
+  // "+ <acessório>" = combo ("Cinza + Watch9", "+ Moto Buds"); "+" de ficha (RAM, câmera) não é.
+  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|notebook|earbuds|galaxy (?:watch|buds))/.test(norm))
+    return null;
+
+  // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha.
+  const head = norm.split(/,|\s-\s|\(/)[0] ?? '';
+  if (head.includes('+')) return null;
+  const model: string[] = [];
+  for (const t of head.split(/[^a-z0-9.+]+/).filter(Boolean)) {
+    if (PHONE_STOP.test(t)) break;
+    if (model.length === 0 && PHONE_BRANDS.has(t)) continue;
+    if (t === '5g' || t === '4g') continue;
+    if (PHONE_BRANDS.has(t)) continue;
+    model.push(t);
+  }
+  if (model.length === 0 || !model.some((t) => /\d/.test(t))) return undefined;
+  return `p:${model.join(' ')}|${storage}gb`;
+}
+
 function productKeyFromTitle(title: string): string | null {
   const norm = normalizeText(title)
     .replace(/mini[\s-]?led/g, 'miniled')
@@ -182,6 +249,10 @@ function productKeyFromTitle(title: string): string | null {
     // 27" / 27'' / 27 pol / 27 polegadas → 27pol
     .replace(/(\d+)\s*(?:"|''|”|pol(?:egadas)?\b)/g, '$1pol');
   if (/\b(?:kit|combo)\b/.test(norm) || KIT_ITEM.test(norm)) return null;
+  if (classifyProduct(title) === 'Smartphone') {
+    const phone = phoneKey(norm);
+    if (phone !== undefined) return phone;
+  }
 
   const tokens = norm
     .split(/[^a-z0-9\-./+]+/)
