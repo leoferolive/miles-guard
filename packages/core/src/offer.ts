@@ -5,7 +5,7 @@ import { normalizeText } from './text.js';
  * Versão das regras de extração. Ao mudar qualquer heurística abaixo, incremente:
  * o worker reprocessa no boot as detecções gravadas com versão menor (backfill).
  */
-export const OFFER_EXTRACTION_VERSION = 3;
+export const OFFER_EXTRACTION_VERSION = 4;
 
 export interface OfferInfo {
   /** Linha do produto, sem markdown/emoji (null se não identificada). */
@@ -61,6 +61,24 @@ function porPrices(lines: string[]): number[] {
   return out;
 }
 
+/**
+ * "Por: R$ 1.999,00 (à vista)" / "✅ *Por: R$ 99*" — linha que COMEÇA com "Por" e SEM "De"
+ * (o "De … por" já é tratado por porPrices). Vale o valor logo após "Por:".
+ */
+function loneRealPorPrices(lines: string[]): number[] {
+  const re = new RegExp(
+    String.raw`^[^\p{L}\p{N}]*por\s*:?\s*\*?\s*R\$\s*\*?\s*` + NUM + String.raw`(?!\s*\*?\s*(?:off|de desconto))`,
+    'iu',
+  );
+  const out: number[] = [];
+  for (const line of lines) {
+    if (/\bde\b/i.test(line)) continue;
+    const m = re.exec(line);
+    if (m?.[1]) out.push(parseBRL(m[1]));
+  }
+  return out;
+}
+
 /** Valores "R$ X" que não são desconto ("R$ 100 OFF") nem parcela ("10x de R$ 99"). */
 function plainRealAmounts(text: string): number[] {
   const re = new RegExp(String.raw`R\$\s*\*?\s*` + NUM + String.raw`(?!\s*(?:off|de desconto))`, 'gi');
@@ -85,6 +103,11 @@ function extractPrice(lines: string[], text: string): number | null | 'ambiguous
     // linha (ex.: "💵 Pix 1198…") não há preço.
     return plainRealAmounts(emojiLines[0] ?? '')[0] ?? null;
   }
+
+  // Vários "Por R$" soltos: sem preço, mas sem descartar título/categoria (comportamento anterior).
+  const lone = loneRealPorPrices(lines);
+  if (lone.length > 1) return null;
+  if (lone.length === 1) return lone[0] ?? null;
 
   const amounts = [...new Set(plainRealAmounts(text))];
   return amounts.length === 1 ? (amounts[0] ?? null) : null;
@@ -174,6 +197,67 @@ function isPartNumber(token: string): boolean {
 /** Código curto (g5, s24): só identifica junto de um qualificador/tamanho/capacidade. */
 const isWeak = (code: string) => code.length <= 3;
 
+/** Palavras genéricas do tipo de aparelho: nunca identificam o modelo. */
+const PHONE_WORDS = new Set(['smartphone', 'celular', 'telefone']);
+const PHONE_BRANDS = new Set([
+  'samsung', 'motorola', 'xiaomi', 'apple', 'lg', 'asus', 'realme', 'infinix', 'nokia', 'zte', 'oppo', 'honor',
+  'oneplus', 'vivo', 'tecno', 'google', 'pixel', 'zenfone',
+]);
+/** Sub-marca que já identifica a linha: a marca antes dela é redundante (Samsung Galaxy = Galaxy). */
+const PHONE_SUBBRANDS = new Set(['galaxy', 'iphone', 'moto', 'edge', 'razr', 'redmi', 'poco']);
+/** Fim do trecho do modelo: capacidade, câmera, tela, RAM, taxa de Hz, polegadas, "com …". */
+const PHONE_STOP =
+  /^(?:\d+(?:gb|tb|mp|hz|mah|w|pol)|gb|tb|\d+[.,]\d+(?:pol)?|\d+k|ram|camera|cam|tela|display|recursos|com|dual|chip|ia|ai|ip\d+|nfc|lte)$/;
+
+/**
+ * Chave de celular = linha do modelo + armazenamento. RAM, câmera, IP, polegadas, Hz, cor
+ * etc. ficam fora (o mesmo aparelho aparece com fichas diferentes). undefined = não deu para
+ * identificar (o chamador cai na lógica genérica); null = combo/acessório.
+ */
+function phoneKey(norm: string): string | null | undefined {
+  // Armazenamento: 1ª capacidade >= 32GB que não seja RAM ("12gb ram", RAM somada
+  // "24gb (8gb ram + …)") nem cartão/expansão ("expansivel ate 1tb", "suporta microsd de 1tb").
+  let storage = 0;
+  for (const m of norm.matchAll(/(\d+)\s*(gb|tb)\b(?!\s*(?:\(|de\s+)?ram|\s*\(\s*\d+\s*gb\s*(?:de\s+)?ram)/g)) {
+    const gb = Number(m[1]) * (m[2] === 'tb' ? 1024 : 1);
+    const before = norm.slice(Math.max(0, m.index - 30), m.index);
+    if (/\b(?:ate|expansivel|suporta|cartao|microsd)\b[^\d]*$/.test(before)) continue;
+    if (gb >= 32) {
+      storage = gb;
+      break;
+    }
+  }
+  if (!storage) return undefined;
+  // "+ <acessório>" = combo ("Cinza + Watch9", "+ Moto Buds"); "+" de ficha (RAM, câmera) não é.
+  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|tab|ipad|airpods|chip|notebook|earbuds)(?![a-z])/.test(norm))
+    return null;
+  // "+ <outro aparelho>" ("S25 256GB + Poco X7") também é combo.
+  const plus = norm.match(/\+\s*([a-z]+)/g) ?? [];
+  if (plus.some((m) => {
+    const w = m.replace(/^\+\s*/, '');
+    return PHONE_BRANDS.has(w) || PHONE_SUBBRANDS.has(w);
+  }))
+    return null;
+
+  // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha. "128 gb" e "8/128gb"
+  // viram o token de capacidade (STOP).
+  const head = (norm.split(/,|\s-\s|\(/)[0] ?? '')
+    .replace(/\b(\d+)\s+(gb|tb)\b/g, '$1$2')
+    .replace(/\b\d+\/(\d+(?:gb|tb))\b/g, '$1');
+  const tokens = head.split(/[^a-z0-9.+]+/).filter(Boolean);
+  const model: string[] = [];
+  for (const [i, t] of tokens.entries()) {
+    // "+ Selfie 12MP" / "+ 16GB RAM Boost": "+" solto é ficha (o combo já foi barrado acima).
+    if (PHONE_STOP.test(t) || t.startsWith('+')) break;
+    // "5G" é o padrão (e muitas lojas omitem); "4G" marca variante distinta (Redmi Note 13 4G ≠ 5G).
+    if (PHONE_WORDS.has(t) || t === '5g') continue;
+    if (PHONE_BRANDS.has(t) && PHONE_SUBBRANDS.has(tokens[i + 1] ?? '')) continue;
+    model.push(t);
+  }
+  if (model.length === 0 || !model.some((t) => /\d/.test(t))) return undefined;
+  return `p:${model.join(' ')}|${storage}gb`;
+}
+
 function productKeyFromTitle(title: string): string | null {
   const norm = normalizeText(title)
     .replace(/mini[\s-]?led/g, 'miniled')
@@ -182,6 +266,10 @@ function productKeyFromTitle(title: string): string | null {
     // 27" / 27'' / 27 pol / 27 polegadas → 27pol
     .replace(/(\d+)\s*(?:"|''|”|pol(?:egadas)?\b)/g, '$1pol');
   if (/\b(?:kit|combo)\b/.test(norm) || KIT_ITEM.test(norm)) return null;
+  if (classifyProduct(title) === 'Smartphone') {
+    const phone = phoneKey(norm);
+    if (phone !== undefined) return phone;
+  }
 
   const tokens = norm
     .split(/[^a-z0-9\-./+]+/)

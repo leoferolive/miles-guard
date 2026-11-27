@@ -307,3 +307,123 @@ describe('extractOffer — categoria', () => {
     expect(extractOffer(IURI_MULTI).category).toBe('Outros');
   });
 });
+
+describe('extractOffer — preço "Por:" e chave de celular', () => {
+  const ml = (t: string, p: string) => `🔥${t}\n\n✅ Por: R$ ${p} (à vista)\nou R$ 2.221,11 em até 10x 💳\n\n🔗 https://exemplo.com/x\n\n*Ofertas limitadas!`;
+  const edge = 'Smartphone Motorola Edge 70 Fusion 5g - 256gb 24gb (8gb Ram + 16gb Ram Boost), Camera 50mp Sony Lytia 710, Tela 1.5k Extreme Amoled 144hz - Verde';
+  const key = (t: string) => extractOffer(`🔥${t}\n✅ Por: R$ 999,00`).productKey;
+
+  it('Por: R$ X (à vista) vira o preço; parcela ignorada', () => {
+    expect(extractOffer(ml(edge, '1.999,00')).price).toBe(1999);
+    expect(extractOffer(`${edge}\n\n✅ *Por: R$ 1.999,00*\nou R$ 2.221,11 em 10x`).price).toBe(1999);
+  });
+  it('formato Amazon continua', () => {
+    expect(extractOffer(`🔥Fone XYZ 123\n\n✅ Por: R$ 1.789,90 em até 12x 💳\n\n🔗 https://exemplo.com/x`).price).toBe(1789.9);
+  });
+  it('duas linhas "Por:" são ambíguas', () => {
+    expect(extractOffer('Produto X1\nPor: R$ 100\nPor: R$ 90').price).toBeNull();
+  });
+  it('vários valores soltos (preço + parcela/frete/cashback) seguem ambíguos', () => {
+    expect(extractOffer('Produto Legal ABC\nR$ 500,00\nR$ 55,00 em até 10x').price).toBeNull();
+    expect(extractOffer('Fone XYZ 123\nR$ 1.299 em 10x sem juros\nFrete grátis acima de R$ 79').price).toBeNull();
+    expect(extractOffer('Fone XYZ 123\nR$ 1.299 em até 10x\n💰 Cashback R$ 50').price).toBeNull();
+    expect(extractOffer('Fone XYZ 123\nR$ 1.299 em até 10x\nGanhe R$ 100 na primeira compra').price).toBeNull();
+  });
+  it('linha 💵 tem precedência sobre "Por R$" sozinho', () => {
+    expect(extractOffer('Produto Legal ABC\n💵 R$ 179\n➡️ Por R$ 15 você leva o frete').price).toBe(179);
+  });
+  it('mesma chave para o mesmo celular com fichas diferentes', () => {
+    const a = [
+      'Smartphone Samsung Galaxy A57 128GB 5G 8GB RAM Cinza 6,7" Câm Tripla + Selfie 12MP',
+      'Celular Samsung Galaxy A57 5G 128GB, 8GB RAM, Câmera 50MP, IP68, Super AMOLED 6.7',
+      'Celular Samsung Galaxy A57 5G 128GB, 8GB RAM, Câmera 50MP, IP68, Super AMOLED 6.7", Recursos AI - Lilás',
+      'Celular Samsung Galaxy A57 5g 128gb, 8gb Ram, Recursos Ai',
+      'Celular Samsung Galaxy A57 5G 128GB',
+    ].map(key);
+    expect(a[0]).not.toBeNull();
+    expect(new Set(a).size).toBe(1);
+    const b = [
+      'Smartphone Motorola Edge 70 Fusion 5g - 256gb 12gb Ram + 12gb Ram Boost, Camera 50mp Sony Lytia 710, Tela 1.5k Extreme Amoled 144hz - Branco',
+      'Smartphone Motorola Edge 70 Fusion 5G 256GB 12GB RAM, Camera 50MP Sony Lytia 710, Tela 1.5K Extreme AMOLED 144Hz, Branco',
+      edge,
+    ].map(key);
+    expect(b[0]).not.toBeNull();
+    expect(new Set(b).size).toBe(1);
+  });
+  it('chaves diferentes para modelos/armazenamentos/edições diferentes', () => {
+    const ks = [
+      'Smartphone Motorola Edge 70 Fusion 5G 256GB',
+      'Smartphone Motorola Edge 70 Pro 5G 256GB',
+      'Smartphone Motorola Edge 70 Crystals by Swarovski 5G 512GB',
+      'Smartphone Motorola Edge 60 Fusion 5G 256GB',
+      'Smartphone Motorola Edge 60 Pro 5G 256GB',
+      'Celular Samsung Galaxy S25 FE 5G 128GB',
+      'Celular Samsung Galaxy S25 5G 128GB',
+      'Celular Samsung Galaxy A57 5G 128GB',
+      'Celular Samsung Galaxy A57 5G 256GB',
+      'Smartphone Motorola Edge 70 Fusion 5g Fifa World Cup Collection 256gb',
+    ].map(key);
+    expect(ks.every((k) => k !== null)).toBe(true);
+    expect(new Set(ks).size).toBe(ks.length);
+  });
+  it('kit/combo segue null; sem armazenamento cai na lógica antiga', () => {
+    expect(key('Smartphone Samsung Galaxy A57 5G (128GB) Cinza + Watch9 BT 40 mm')).toBeNull();
+    expect(key('Kit Smartphone Motorola Moto G56 256GB + Moto Buds 2')).toBeNull();
+    expect(key('Combo Samsung Galaxy A57 128GB')).toBeNull();
+    const ref = key('Celular Samsung Galaxy A57 5G 128GB');
+    expect(ref).not.toBeNull();
+    expect(key('Celular Samsung Galaxy A57 5G')).not.toBe(ref);
+  });
+  it('armazenamento = 1ª capacidade, ignorando expansão por cartão', () => {
+    const a = key('Smartphone Samsung Galaxy A16 128GB 4GB RAM Expansível até 1TB');
+    const b = key('Smartphone Samsung Galaxy A16 256GB 8GB RAM Expansível até 1TB');
+    expect(a).not.toBeNull();
+    expect(a).not.toBe(b);
+    expect(a).toBe(key('Smartphone Samsung Galaxy A16 128GB'));
+  });
+  it('marca só cai antes de sub-marca (Galaxy, iPhone, Moto, Edge, Redmi…)', () => {
+    const diff: [string, string][] = [
+      ['Smartphone Realme 14 Pro 5G 256GB', 'Smartphone Xiaomi 14 Pro 5G 256GB'],
+      ['Smartphone Realme 14T 256GB', 'Smartphone Xiaomi 14T 256GB'],
+      ['Realme Note 60 128GB', 'Infinix Note 60 128GB'],
+    ];
+    for (const [a, b] of diff) {
+      expect(key(a)).not.toBeNull();
+      expect(key(a)).not.toBe(key(b));
+    }
+    const same: [string, string][] = [
+      ['Galaxy A57 5G 128GB', 'Samsung Galaxy A57 5G 128GB'],
+      ['Xiaomi Redmi Note 13 256GB', 'Redmi Note 13 256GB'],
+      ['Motorola Edge 70 Fusion 256GB', 'Edge 70 Fusion 256GB'],
+      ['Apple iPhone 15 128GB', 'iPhone 15 (128 GB) - Preto'],
+      ['iPhone 16 128 GB', 'iPhone 16 128GB'],
+      ['Smartphone Samsung Galaxy A16 8/128GB', 'Smartphone Samsung Galaxy A16 128GB'],
+    ];
+    for (const [a, b] of same) {
+      expect(key(a)).not.toBeNull();
+      expect(key(a)).toBe(key(b));
+    }
+  });
+  it('"+" de ficha (câmera, RAM Boost) não anula a chave; combo e "Pro+" seguem distintos', () => {
+    const a57 = key('Smartphone Samsung Galaxy A57 128GB 5G 8GB RAM Cinza 6.7" Câm Tripla + Selfie 12MP');
+    expect(a57).not.toBeNull();
+    expect(a57).toBe(key('Celular Samsung Galaxy A57 5G 128GB'));
+    expect(key('Smartphone Motorola Moto G56 5G 256GB 8GB RAM + 16GB RAM Boost')).not.toBeNull();
+    expect(key('Galaxy A16 128GB 4GB RAM Câm 50MP + Selfie 13MP')).not.toBeNull();
+    expect(key('Smartphone Samsung Galaxy A57 128GB + Galaxy Buds 3')).toBeNull();
+    expect(key('Smartphone Motorola Moto G56 256GB + Capa')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy A57 + Galaxy Tab A9 128GB')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy A57 128GB + Chip')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy S25 256GB + Poco X7 256GB')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy S25 256GB + Realme 14 256GB')).toBeNull();
+    expect(key('Smartphone Xiaomi Redmi Note 13 4G 128GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 13 5G 128GB'));
+    expect(key('Smartphone Xiaomi Redmi Note 13 5G 128GB')).toBe(key('Smartphone Xiaomi Redmi Note 13 128GB'));
+    expect(key('Smartphone Realme GT 7 32GB (16GB RAM + 16GB RAM Boost) 256GB')).toBe(key('Smartphone Realme GT 7 256GB'));
+    expect(key('Smartphone Xiaomi Redmi Note 14 Pro+ 5G 256GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 14 Pro 5G 256GB'));
+    expect(key('Celular Samsung Galaxy S25+ 5G 256GB')).not.toBe(key('Celular Samsung Galaxy S25 5G 256GB'));
+  });
+  it('"Por R$ X OFF" é desconto, não preço', () => {
+    expect(extractOffer('Produto Legal ABC\nR$ 500\nPor R$ 50 OFF com cupom').price).toBe(500);
+    expect(extractOffer('Produto Legal ABC\nR$ 500\n✅ Por: *R$ 50* OFF no app').price).not.toBe(50);
+  });
+});
