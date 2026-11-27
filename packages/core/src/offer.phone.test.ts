@@ -422,7 +422,8 @@ describe("K6/P3 — fora de Smartphone nada muda (chave e preço)", () => {
       categoria: "Casa inteligente",
       texto:
         "🔥Amazon Echo Dot Max (Geração mais recente), smart speaker com Alexa, som envolvente e hub de casa inteligente integrado, ideal para sua sala de estar, Cor Grafite, com Acesso Antecipado à Alexa+\n\n✅ Por: R$ 759,00 (à vista)\nou R$ 807,45 em até 12x 💳\n\n🔗 https://exemplo.com/x\n\n*Ofertas limitadas!",
-      price: null,
+      // Be!Tech "Por: R$ X (à vista)": era null antes da correção (P1).
+      price: 759,
       productKey:
         "w:acesso+alexa+amazon+antecipado+casa+cor+dot+echo+envolvente+estar+geracao+grafite+hub+ideal+integrado+inteligente+mais+max+recente+sala+smart+som+speaker+sua",
     },
