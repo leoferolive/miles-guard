@@ -76,20 +76,13 @@ function loneRealPorPrices(lines: string[]): number[] {
   return out;
 }
 
-/**
- * Valores "R$ X" que não são desconto ("R$ 100 OFF") nem parcela ("10x de R$ 99"). Com
- * `skipInstallment`, também descarta "R$ Y em até 10x" / "R$ Y em 10x" (valor parcelado).
- */
-function plainRealAmounts(text: string, skipInstallment = false): number[] {
+/** Valores "R$ X" que não são desconto ("R$ 100 OFF") nem parcela ("10x de R$ 99"). */
+function plainRealAmounts(text: string): number[] {
   const re = new RegExp(String.raw`R\$\s*\*?\s*` + NUM + String.raw`(?!\s*(?:off|de desconto))`, 'gi');
   const out: number[] = [];
   for (const m of text.matchAll(re)) {
     const before = text.slice(Math.max(0, m.index - 8), m.index);
     if (/\d+\s*x\s*(?:de\s*)?$/i.test(before)) continue;
-    if (skipInstallment) {
-      const after = text.slice(m.index + m[0].length, m.index + m[0].length + 20);
-      if (/^\s*\*?\s*em\s+(?:até\s+|ate\s+)?\d+\s*x/i.test(after)) continue;
-    }
     if (m[1]) out.push(parseBRL(m[1]));
   }
   return out;
@@ -100,10 +93,6 @@ function extractPrice(lines: string[], text: string): number | null | 'ambiguous
   if (por.length > 1) return 'ambiguous';
   if (por.length === 1) return por[0] ?? null;
 
-  const lone = loneRealPorPrices(lines);
-  if (lone.length > 1) return 'ambiguous';
-  if (lone.length === 1) return lone[0] ?? null;
-
   const emojiLines = lines.filter((l) => PRICE_EMOJI_LINE.test(l));
   if (emojiLines.length > 1) return 'ambiguous';
   if (emojiLines.length === 1) {
@@ -112,9 +101,12 @@ function extractPrice(lines: string[], text: string): number | null | 'ambiguous
     return plainRealAmounts(emojiLines[0] ?? '')[0] ?? null;
   }
 
-  // "R$ Y em até 10x" é parcela: só vale como preço se não houver outro valor.
-  let amounts = [...new Set(plainRealAmounts(text, true))];
-  if (amounts.length === 0) amounts = [...new Set(plainRealAmounts(text))];
+  // Vários "Por R$" soltos: sem preço, mas sem descartar título/categoria (comportamento anterior).
+  const lone = loneRealPorPrices(lines);
+  if (lone.length > 1) return null;
+  if (lone.length === 1) return lone[0] ?? null;
+
+  const amounts = [...new Set(plainRealAmounts(text))];
   return amounts.length === 1 ? (amounts[0] ?? null) : null;
 }
 
@@ -202,39 +194,52 @@ function isPartNumber(token: string): boolean {
 /** Código curto (g5, s24): só identifica junto de um qualificador/tamanho/capacidade. */
 const isWeak = (code: string) => code.length <= 3;
 
+/** Palavras genéricas do tipo de aparelho: nunca identificam o modelo. */
+const PHONE_WORDS = new Set(['smartphone', 'celular', 'telefone']);
 const PHONE_BRANDS = new Set([
-  'smartphone', 'celular', 'telefone', 'samsung', 'motorola', 'xiaomi', 'apple', 'lg', 'asus', 'realme', 'infinix', 'nokia', 'zte', 'oppo', 'honor',
+  'samsung', 'motorola', 'xiaomi', 'apple', 'lg', 'asus', 'realme', 'infinix', 'nokia', 'zte', 'oppo', 'honor',
 ]);
+/** Sub-marca que já identifica a linha: a marca antes dela é redundante (Samsung Galaxy = Galaxy). */
+const PHONE_SUBBRANDS = new Set(['galaxy', 'iphone', 'moto', 'edge', 'razr', 'redmi', 'poco']);
 /** Fim do trecho do modelo: capacidade, câmera, tela, RAM, taxa de Hz, polegadas, "com …". */
 const PHONE_STOP =
-  /^(?:\d+(?:gb|tb|mp|hz|mah|w|pol)|\d+[.,]\d+(?:pol)?|\d+k|ram|camera|cam|tela|display|recursos|com|dual|chip|ia|ai|ip\d+|nfc|lte)$/;
+  /^(?:\d+(?:gb|tb|mp|hz|mah|w|pol)|gb|tb|\d+[.,]\d+(?:pol)?|\d+k|ram|camera|cam|tela|display|recursos|com|dual|chip|ia|ai|ip\d+|nfc|lte)$/;
 
 /**
  * Chave de celular = linha do modelo + armazenamento. RAM, câmera, IP, polegadas, Hz, cor
- * etc. ficam fora (o mesmo aparelho aparece com fichas diferentes). null = não deu para
- * identificar (undefined → o chamador cai na lógica genérica); null = combo/acessório.
+ * etc. ficam fora (o mesmo aparelho aparece com fichas diferentes). undefined = não deu para
+ * identificar (o chamador cai na lógica genérica); null = combo/acessório.
  */
 function phoneKey(norm: string): string | null | undefined {
-  // Armazenamento: maior capacidade >= 32GB que não seja RAM ("12gb ram").
+  // Armazenamento: 1ª capacidade >= 32GB que não seja RAM ("12gb ram") nem cartão/expansão
+  // ("expansivel ate 1tb", "suporta microsd de 1tb").
   let storage = 0;
   for (const m of norm.matchAll(/(\d+)\s*(gb|tb)\b(?!\s*(?:\(|de\s+)?ram)/g)) {
     const gb = Number(m[1]) * (m[2] === 'tb' ? 1024 : 1);
-    if (gb >= 32 && gb > storage) storage = gb;
+    const before = norm.slice(Math.max(0, m.index - 30), m.index);
+    if (/\b(?:ate|expansivel|suporta|cartao|microsd)\b[^\d]*$/.test(before)) continue;
+    if (gb >= 32) {
+      storage = gb;
+      break;
+    }
   }
   if (!storage) return undefined;
   // "+ <acessório>" = combo ("Cinza + Watch9", "+ Moto Buds"); "+" de ficha (RAM, câmera) não é.
   if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|notebook|earbuds|galaxy (?:watch|buds))/.test(norm))
     return null;
 
-  // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha.
-  const head = norm.split(/,|\s-\s|\(/)[0] ?? '';
-  if (head.includes('+')) return null;
+  // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha. "128 gb" e "8/128gb"
+  // viram o token de capacidade (STOP).
+  const head = (norm.split(/,|\s-\s|\(/)[0] ?? '')
+    .replace(/\b(\d+)\s+(gb|tb)\b/g, '$1$2')
+    .replace(/\b\d+\/(\d+(?:gb|tb))\b/g, '$1');
+  const tokens = head.split(/[^a-z0-9.+]+/).filter(Boolean);
   const model: string[] = [];
-  for (const t of head.split(/[^a-z0-9.+]+/).filter(Boolean)) {
-    if (PHONE_STOP.test(t)) break;
-    if (model.length === 0 && PHONE_BRANDS.has(t)) continue;
-    if (t === '5g' || t === '4g') continue;
-    if (PHONE_BRANDS.has(t)) continue;
+  for (const [i, t] of tokens.entries()) {
+    // "+ Selfie 12MP" / "+ 16GB RAM Boost": "+" solto é ficha (o combo já foi barrado acima).
+    if (PHONE_STOP.test(t) || t.startsWith('+')) break;
+    if (PHONE_WORDS.has(t) || t === '5g' || t === '4g') continue;
+    if (PHONE_BRANDS.has(t) && PHONE_SUBBRANDS.has(tokens[i + 1] ?? '')) continue;
     model.push(t);
   }
   if (model.length === 0 || !model.some((t) => /\d/.test(t))) return undefined;
