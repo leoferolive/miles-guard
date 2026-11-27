@@ -249,7 +249,8 @@ function phoneKey(norm: string): string | null | undefined {
   for (const [i, t] of tokens.entries()) {
     // "+ Selfie 12MP" / "+ 16GB RAM Boost": "+" solto é ficha (o combo já foi barrado acima).
     if (PHONE_STOP.test(t) || t.startsWith('+')) break;
-    if (PHONE_WORDS.has(t) || t === '5g' || t === '4g') continue;
+    // "5G" é o padrão (e muitas lojas omitem); "4G" marca variante distinta (Redmi Note 13 4G ≠ 5G).
+    if (PHONE_WORDS.has(t) || t === '5g') continue;
     if (PHONE_BRANDS.has(t) && PHONE_SUBBRANDS.has(tokens[i + 1] ?? '')) continue;
     model.push(t);
   }

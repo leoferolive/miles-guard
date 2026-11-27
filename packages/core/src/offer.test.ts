@@ -416,6 +416,8 @@ describe('extractOffer — preço "Por:" e chave de celular', () => {
     expect(key('Smartphone Samsung Galaxy A57 128GB + Chip')).toBeNull();
     expect(key('Smartphone Samsung Galaxy S25 256GB + Poco X7 256GB')).toBeNull();
     expect(key('Smartphone Samsung Galaxy S25 256GB + Realme 14 256GB')).toBeNull();
+    expect(key('Smartphone Xiaomi Redmi Note 13 4G 128GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 13 5G 128GB'));
+    expect(key('Smartphone Xiaomi Redmi Note 13 5G 128GB')).toBe(key('Smartphone Xiaomi Redmi Note 13 128GB'));
     expect(key('Smartphone Xiaomi Redmi Note 14 Pro+ 5G 256GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 14 Pro 5G 256GB'));
     expect(key('Celular Samsung Galaxy S25+ 5G 256GB')).not.toBe(key('Celular Samsung Galaxy S25 5G 256GB'));
   });
