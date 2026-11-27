@@ -215,10 +215,10 @@ const PHONE_STOP =
  * identificar (o chamador cai na lógica genérica); null = combo/acessório.
  */
 function phoneKey(norm: string): string | null | undefined {
-  // Armazenamento: 1ª capacidade >= 32GB que não seja RAM ("12gb ram") nem cartão/expansão
-  // ("expansivel ate 1tb", "suporta microsd de 1tb").
+  // Armazenamento: 1ª capacidade >= 32GB que não seja RAM ("12gb ram", RAM somada
+  // "24gb (8gb ram + …)") nem cartão/expansão ("expansivel ate 1tb", "suporta microsd de 1tb").
   let storage = 0;
-  for (const m of norm.matchAll(/(\d+)\s*(gb|tb)\b(?!\s*(?:\(|de\s+)?ram)/g)) {
+  for (const m of norm.matchAll(/(\d+)\s*(gb|tb)\b(?!\s*(?:\(|de\s+)?ram|\s*\(\s*\d+\s*gb\s*(?:de\s+)?ram)/g)) {
     const gb = Number(m[1]) * (m[2] === 'tb' ? 1024 : 1);
     const before = norm.slice(Math.max(0, m.index - 30), m.index);
     if (/\b(?:ate|expansivel|suporta|cartao|microsd)\b[^\d]*$/.test(before)) continue;
