@@ -66,7 +66,10 @@ function porPrices(lines: string[]): number[] {
  * (o "De … por" já é tratado por porPrices). Vale o valor logo após "Por:".
  */
 function loneRealPorPrices(lines: string[]): number[] {
-  const re = new RegExp(String.raw`^[^\p{L}\p{N}]*por\s*:?\s*\*?\s*R\$\s*\*?\s*` + NUM, 'iu');
+  const re = new RegExp(
+    String.raw`^[^\p{L}\p{N}]*por\s*:?\s*\*?\s*R\$\s*\*?\s*` + NUM + String.raw`(?!\s*\*?\s*(?:off|de desconto))`,
+    'iu',
+  );
   const out: number[] = [];
   for (const line of lines) {
     if (/\bde\b/i.test(line)) continue;
@@ -198,6 +201,7 @@ const isWeak = (code: string) => code.length <= 3;
 const PHONE_WORDS = new Set(['smartphone', 'celular', 'telefone']);
 const PHONE_BRANDS = new Set([
   'samsung', 'motorola', 'xiaomi', 'apple', 'lg', 'asus', 'realme', 'infinix', 'nokia', 'zte', 'oppo', 'honor',
+  'oneplus', 'vivo', 'tecno', 'google', 'pixel', 'zenfone',
 ]);
 /** Sub-marca que já identifica a linha: a marca antes dela é redundante (Samsung Galaxy = Galaxy). */
 const PHONE_SUBBRANDS = new Set(['galaxy', 'iphone', 'moto', 'edge', 'razr', 'redmi', 'poco']);
@@ -225,7 +229,14 @@ function phoneKey(norm: string): string | null | undefined {
   }
   if (!storage) return undefined;
   // "+ <acessório>" = combo ("Cinza + Watch9", "+ Moto Buds"); "+" de ficha (RAM, câmera) não é.
-  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|tab|ipad|airpods|chip|notebook|earbuds|galaxy|iphone|moto|motorola|samsung|apple|xiaomi|redmi)(?![a-z])/.test(norm))
+  if (/\+\s*(?:smart ?)?(?:watch|band|buds|fone|tws|relogio|carregador|capa|case|pelicula|caixa|tablet|tab|ipad|airpods|chip|notebook|earbuds)(?![a-z])/.test(norm))
+    return null;
+  // "+ <outro aparelho>" ("S25 256GB + Poco X7") também é combo.
+  const plus = norm.match(/\+\s*([a-z]+)/g) ?? [];
+  if (plus.some((m) => {
+    const w = m.replace(/^\+\s*/, '');
+    return PHONE_BRANDS.has(w) || PHONE_SUBBRANDS.has(w);
+  }))
     return null;
 
   // Trecho do modelo: até a 1ª vírgula, " - ", "(" ou token de ficha. "128 gb" e "8/128gb"

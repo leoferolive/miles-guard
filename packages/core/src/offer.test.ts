@@ -414,7 +414,13 @@ describe('extractOffer — preço "Por:" e chave de celular', () => {
     expect(key('Smartphone Motorola Moto G56 256GB + Capa')).toBeNull();
     expect(key('Smartphone Samsung Galaxy A57 + Galaxy Tab A9 128GB')).toBeNull();
     expect(key('Smartphone Samsung Galaxy A57 128GB + Chip')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy S25 256GB + Poco X7 256GB')).toBeNull();
+    expect(key('Smartphone Samsung Galaxy S25 256GB + Realme 14 256GB')).toBeNull();
     expect(key('Smartphone Xiaomi Redmi Note 14 Pro+ 5G 256GB')).not.toBe(key('Smartphone Xiaomi Redmi Note 14 Pro 5G 256GB'));
     expect(key('Celular Samsung Galaxy S25+ 5G 256GB')).not.toBe(key('Celular Samsung Galaxy S25 5G 256GB'));
+  });
+  it('"Por R$ X OFF" é desconto, não preço', () => {
+    expect(extractOffer('Produto Legal ABC\nR$ 500\nPor R$ 50 OFF com cupom').price).toBe(500);
+    expect(extractOffer('Produto Legal ABC\nR$ 500\n✅ Por: *R$ 50* OFF no app').price).not.toBe(50);
   });
 });
